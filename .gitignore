@@ -1,0 +1,15 @@
+# сборка
+.gradle/
+.kotlin/
+build/
+app/build/
+
+# путь к SDK, у каждой машины свой
+local.properties
+
+# IDE и python
+.idea/
+__pycache__/
+
+# разное
+*.xlsx
