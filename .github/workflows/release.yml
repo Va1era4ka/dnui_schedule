@@ -19,18 +19,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Тег v1.2 -> обычный релиз. Пуш в master -> перезаписывается черновой "latest".
+      # Тег v1.2 -> релиз 1.2. Пуш в master -> только R2 и артефакт прогона,
+      # чтобы в списке тегов лежали одни настоящие версии.
       - name: Определить версию
         id: v
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "tag=$GITHUB_REF_NAME"      >> "$GITHUB_OUTPUT"
-            echo "prerelease=false"          >> "$GITHUB_OUTPUT"
           else
             echo "name=master-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
-            echo "tag=latest"                     >> "$GITHUB_OUTPUT"
-            echo "prerelease=true"                >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-java@v4
@@ -63,12 +60,17 @@ jobs:
           mv app/build/outputs/apk/release/app-release.apk \
              dnui-schedule-${{ steps.v.outputs.name }}.apk
 
+      - name: Артефакт прогона
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnui-schedule-${{ steps.v.outputs.name }}
+          path: dnui-schedule-${{ steps.v.outputs.name }}.apk
+          if-no-files-found: error
+
       - name: Релиз на GitHub
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.v.outputs.tag }}
-          name: ${{ steps.v.outputs.tag == 'latest' && 'Последняя сборка master' || steps.v.outputs.tag }}
-          prerelease: ${{ steps.v.outputs.prerelease }}
           files: dnui-schedule-${{ steps.v.outputs.name }}.apk
           fail_on_unmatched_files: true
 

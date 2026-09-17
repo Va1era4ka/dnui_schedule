@@ -25,7 +25,7 @@
 [`.github/workflows/release.yml`](.github/workflows/release.yml) гоняет тесты, собирает
 подписанный release-APK, кладёт его в GitHub Releases и в Cloudflare R2.
 
-- **пуш в `master`** → перезаписывается черновой релиз `latest`, версия `master-<номер сборки>`
+- **пуш в `master`** → APK только в R2 и артефактом к прогону, версия `master-<номер сборки>`
 - **тег `v1.2`** → обычный релиз `v1.2`
 - **вручную** → вкладка Actions, кнопка Run workflow
 
