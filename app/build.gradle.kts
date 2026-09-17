@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Ключ подписи приходит из переменных окружения - в CI из секретов репозитория.
+// Локально их нет, и release собирается отладочным ключом: ставить на свой телефон хватает.
+val keystore: String? = System.getenv("KEYSTORE_FILE")
+
 android {
     namespace = "ru.valov.raspisanie"
     compileSdk = 35
@@ -11,8 +15,9 @@ android {
         applicationId = "ru.valov.raspisanie"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // CI передаёт -PappVersionCode/-PappVersionName, иначе значения для локальной сборки.
+        versionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("appVersionName") as String?) ?: "dev"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -20,7 +25,23 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildTypes { release { isMinifyEnabled = false } }
+
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = file(keystore)
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
+        }
+    }
 }
 
 dependencies {

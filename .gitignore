@@ -13,3 +13,7 @@ __pycache__/
 
 # разное
 *.xlsx
+# ключ подписи - в секретах репозитория, в гит не кладём
+release.jks
+*.base64.txt
+keystore-secrets.txt
