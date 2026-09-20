@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -230,6 +232,8 @@ private fun SettingsDialog(
     var digestAt by remember { mutableStateOf(prefs.digestAt) }
     var nextUpOn by remember { mutableStateOf(prefs.nextUpOn) }
     var lead by remember { mutableStateOf(prefs.leadMin) }
+    val scope = rememberCoroutineScope()
+    var update by remember { mutableStateOf("Версия " + Updater.installed(ctx)) }
 
     AlertDialog(
         onDismissRequest = onClose,
@@ -265,6 +269,18 @@ private fun SettingsDialog(
                             TextButton(onClick = { lead = m; prefs.leadMin = m }) { Text("" + m) }
                         }
                     }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(update, Modifier.weight(1f), fontSize = 13.sp)
+                    TextButton(onClick = {
+                        update = "Проверяю..."
+                        scope.launch {
+                            update = runCatching { Updater.update(ctx) }
+                                .getOrElse { "Не вышло: " + (it.message ?: "сеть") }
+                        }
+                    }) { Text("Обновить") }
                 }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
