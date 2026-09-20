@@ -278,7 +278,9 @@ private fun SettingsDialog(
                         update = "Проверяю..."
                         scope.launch {
                             update = runCatching { Updater.update(ctx) }
-                                .getOrElse { "Не вышло: " + (it.message ?: "сеть") }
+                                .getOrElse {
+                                    "Ошибка обновления: " + (it.message ?: "нет сети")
+                                }
                         }
                     }) { Text("Обновить") }
                 }

@@ -148,5 +148,9 @@ class AlarmReceiver : BroadcastReceiver() {
 }
 
 class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(ctx: Context, intent: Intent) = Notifier.schedule(ctx)
+    override fun onReceive(ctx: Context, intent: Intent) {
+        // Обновились - скачанный APK в кэше больше не нужен.
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) Updater.clearDownload(ctx)
+        Notifier.schedule(ctx)
+    }
 }

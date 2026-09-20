@@ -17,3 +17,6 @@ __pycache__/
 release.jks
 *.base64.txt
 keystore-secrets.txt
+
+# собранные APK
+*.apk

@@ -18,6 +18,7 @@ object Updater {
     private const val API =
         "https://api.github.com/repos/Va1era4ka/dnui_schedule/releases/latest"
     private const val MIRROR = "https://svin-assets.hsryata.com/dnui-app-release/"
+    private const val LATEST = MIRROR + "dnui-schedule-latest.apk"
 
     data class Release(val version: String, val apkUrl: String?)
 
@@ -36,22 +37,35 @@ object Updater {
 
     /** Проверяет, качает и отдаёт APK системному установщику. Возвращает строку для UI. */
     suspend fun update(ctx: Context): String = withContext(Dispatchers.IO) {
-        val r = parse(get(API)) ?: return@withContext "GitHub ответил непонятным"
+        // Приватный репозиторий отвечает 404, сеть может отвалиться - тогда версию
+        // узнать негде: качаем latest с зеркала, а разницу версий покажет установщик.
+        val r = runCatching { parse(get(API)) }.getOrNull()
+            ?: run {
+                install(ctx, download(ctx, LATEST))
+                return@withContext "GitHub не ответил, ставим latest с зеркала"
+            }
         // ponytail: сравнение строк, а не версий - на master стоит master-<N>,
         // он не равен тегу и апдейт предложится; порядковое сравнение нужно
         // только если появятся ветки релизов.
         if (r.version == installed(ctx)) return@withContext "Уже последняя: " + r.version
-        install(ctx, download(ctx, r))
+        // Сначала зеркало: оно раздаёт с CDN и не упирается в лимиты GitHub.
+        install(ctx, download(ctx, MIRROR + "dnui-schedule-" + r.version + ".apk", r.apkUrl, LATEST))
         "Ставим " + r.version
     }
 
+    /** Скачанный APK после установки не нужен: зовётся по MY_PACKAGE_REPLACED. */
+    fun clearDownload(ctx: Context) {
+        apk(ctx).delete()
+    }
+
+    private fun apk(ctx: Context) = File(ctx.cacheDir, "update.apk")
+
     private fun get(url: String): String = open(url).bufferedReader().use { it.readText() }
 
-    private fun download(ctx: Context, r: Release): File {
-        val out = File(ctx.cacheDir, "update.apk")
+    private fun download(ctx: Context, vararg urls: String?): File {
+        val out = apk(ctx)
         var last: IOException? = null
-        // Сначала зеркало: оно раздаёт с CDN и не упирается в лимиты GitHub.
-        for (url in listOfNotNull(MIRROR + "dnui-schedule-" + r.version + ".apk", r.apkUrl)) {
+        for (url in urls.filterNotNull()) {
             try {
                 open(url).use { input -> out.outputStream().use { input.copyTo(it) } }
                 return out
