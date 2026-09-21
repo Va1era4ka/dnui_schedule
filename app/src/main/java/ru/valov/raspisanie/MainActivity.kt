@@ -80,7 +80,11 @@ private fun minutesUntil(from: java.time.LocalTime, to: java.time.LocalTime): Lo
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AppTheme { App() } }
+        val prefs = Prefs(this)
+        setContent {
+            var theme by remember { mutableStateOf(prefs.theme) }
+            AppTheme(theme) { App(theme) { theme = it; prefs.theme = it } }
+        }
     }
 
     override fun onResume() {
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App() {
+fun App(theme: Int, onTheme: (Int) -> Unit) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     var klass by remember { mutableStateOf(prefs.klass) }
@@ -138,8 +142,9 @@ fun App() {
                     }
                     1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
                     else -> SettingsScreen(
-                        prefs, klass,
+                        prefs, klass, theme,
                         onKlass = { klass = it; prefs.klass = it },
+                        onTheme = onTheme,
                         onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
                     )
                 }

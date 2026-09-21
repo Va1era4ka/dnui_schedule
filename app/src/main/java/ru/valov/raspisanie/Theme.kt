@@ -1,5 +1,6 @@
 package ru.valov.raspisanie
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -19,13 +20,18 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 
 // Токены из макета «Расписание пар - Android», артборд «Токены и компоненты».
 // ponytail: шрифты макета (Onest / Unbounded) не подключены - системный sans,
@@ -105,9 +111,25 @@ private val AppTypography = Typography().let { d ->
     )
 }
 
+/** Выбранная тема: её же спрашивает subjectColors, системной она может и не быть. */
+private val LocalDark = staticCompositionLocalOf { false }
+
+/** @param theme 0 - системная, 1 - светлая, 2 - тёмная (Prefs.theme). */
 @Composable
-fun AppTheme(content: @Composable () -> Unit) {
-    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
+fun AppTheme(theme: Int = 0, content: @Composable () -> Unit) {
+    val dark = when (theme) {
+        1 -> false
+        2 -> true
+        else -> isSystemInDarkTheme()
+    }
+    val colors = if (dark) DarkColors else LightColors
+    val view = LocalView.current
+    // Статус-бар красит XML-тема по -night, а выбор в настройках её перебивает.
+    SideEffect {
+        val window = (view.context as Activity).window
+        window.statusBarColor = colors.background.toArgb()
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !dark
+    }
     MaterialTheme(
         colorScheme = colors,
         typography = AppTypography,
@@ -115,7 +137,11 @@ fun AppTheme(content: @Composable () -> Unit) {
     ) {
         // Экран пары открывается мимо Scaffold, а LocalContentColor по умолчанию чёрный:
         // без этого Text и Icon без явного color на тёмной теме сливались с фоном.
-        CompositionLocalProvider(LocalContentColor provides colors.onSurface, content = content)
+        CompositionLocalProvider(
+            LocalDark provides dark,
+            LocalContentColor provides colors.onSurface,
+            content = content,
+        )
     }
 }
 
@@ -148,7 +174,7 @@ private val SubjectDark = listOf(
 /** Цвет предмета: индекс - место названия в Schedule.subjects. */
 @Composable
 fun subjectColors(index: Int): Pair<Color, Color> {
-    val palette = if (isSystemInDarkTheme()) SubjectDark else SubjectLight
+    val palette = if (LocalDark.current) SubjectDark else SubjectLight
     return palette[Math.floorMod(index, palette.size)]
 }
 

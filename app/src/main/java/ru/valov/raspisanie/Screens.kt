@@ -531,7 +531,14 @@ private fun InfoDivider() {
 // ---------- Настройки ----------
 
 @Composable
-fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: () -> Unit) {
+fun SettingsScreen(
+    prefs: Prefs,
+    klass: Int,
+    theme: Int,
+    onKlass: (Int) -> Unit,
+    onTheme: (Int) -> Unit,
+    onChanged: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     var digestOn by remember { mutableStateOf(prefs.digestOn) }
@@ -558,6 +565,13 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
             modifier = Modifier.padding(top = 14.dp, bottom = 18.dp),
         )
 
+        SectionLabel("Оформление")
+        Segmented(
+            listOf("Системная", "Светлая", "Тёмная"), theme, onTheme,
+            Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(16.dp))
         SectionLabel("Расписание")
         SettingsBlock {
             Row(

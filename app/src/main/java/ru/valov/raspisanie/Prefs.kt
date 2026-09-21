@@ -12,6 +12,11 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("klass", 1)
         set(v) = sp.edit().putInt("klass", v).apply()
 
+    /** Оформление: 0 - системная тема, 1 - светлая, 2 - тёмная. */
+    var theme: Int
+        get() = sp.getInt("theme", 0)
+        set(v) = sp.edit().putInt("theme", v).apply()
+
     var digestOn: Boolean
         get() = sp.getBoolean("digestOn", true)
         set(v) = sp.edit().putBoolean("digestOn", v).apply()
