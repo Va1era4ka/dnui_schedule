@@ -76,6 +76,9 @@ import java.time.LocalTime
 private val CELL_H = 90.dp
 private val CELL_GAP = 5.dp
 
+/** Высота плитки на [span] слотов - вместе со съеденными промежутками. */
+private fun cellHeight(span: Int) = CELL_H * span + CELL_GAP * (span - 1)
+
 @Composable
 fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDate) -> Unit) {
     val cs = MaterialTheme.colorScheme
@@ -182,8 +185,8 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
                     Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(CELL_GAP),
                 ) {
-                    schedule.slots.forEach { (n, _) ->
-                        WeekCell(schedule, schedule.on(d).firstOrNull { it.slot == n }, d, now, onPick)
+                    schedule.column(d).forEach { (l, span) ->
+                        WeekCell(schedule, l, d, now, span, onPick)
                     }
                 }
             }
@@ -239,7 +242,7 @@ private fun RowScope.HolidayCell(slots: Int) {
     Column(
         Modifier
             .weight(1f)
-            .height(CELL_H * slots + CELL_GAP * (slots - 1))
+            .height(cellHeight(slots))
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant),
         verticalArrangement = Arrangement.Center,
@@ -261,12 +264,13 @@ private fun WeekCell(
     l: Lesson?,
     date: LocalDate,
     now: LocalDateTime,
+    span: Int,
     onPick: (Lesson, LocalDate) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     if (l == null) {
         Box(
-            Modifier.fillMaxWidth().height(CELL_H)
+            Modifier.fillMaxWidth().height(cellHeight(span))
                 .clip(RoundedCornerShape(14.dp)).background(cs.surfaceVariant)
         )
         return
@@ -277,7 +281,7 @@ private fun WeekCell(
     Column(
         Modifier
             .fillMaxWidth()
-            .height(CELL_H)
+            .height(cellHeight(span))
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .then(if (running) Modifier.border(2.5.dp, cs.primary, RoundedCornerShape(14.dp)) else Modifier)

@@ -113,6 +113,25 @@ class Schedule(
             .sortedBy { it.start }
     }
 
+    /**
+     * Колонка дня для сетки недели: пара (или пусто) и сколько слотов она занимает.
+     * Сдвоенная пара идёт одной записью 08:00-11:40 - это два слота, а не один.
+     */
+    fun column(date: LocalDate): List<Pair<Lesson?, Int>> {
+        val today = on(date)
+        val out = ArrayList<Pair<Lesson?, Int>>()
+        var i = 0
+        while (i < slots.size) {
+            val l = today.firstOrNull { it.slot == slots[i].first }
+            val span =
+                if (l == null) 1
+                else slots.count { !it.second.isBefore(l.start) && it.second.isBefore(l.end) }
+            out.add(l to span)
+            i += maxOf(span, 1)
+        }
+        return out
+    }
+
     /** Дата помечена выходным - в сетке недели это одна плашка на весь день. */
     fun isHoliday(date: LocalDate): Boolean = shifts[date] == 0
 

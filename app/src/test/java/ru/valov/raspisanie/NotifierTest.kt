@@ -108,6 +108,22 @@ class NotifierTest {
         assertTrue(shifted.on(LocalDate.parse("2026-10-05")).isEmpty())
     }
 
+    @Test fun `сдвоенная пара занимает в сетке два слота`() {
+        val s2 = Schedule(
+            LocalDate.parse("2026-08-31"),
+            listOf(
+                lesson(1, 2, "10:00", "11:40", "вторая"),
+                lesson(3, 1, "08:00", "11:40", "ООП"),          // сдвоенная: слоты 1 и 2
+                lesson(3, 3, "13:20", "15:00", "китайский"),
+            ),
+        )
+        fun column(d: String) = s2.column(LocalDate.parse(d)).map { (l, span) ->
+            (l?.name ?: "-") to span
+        }
+        assertEquals(listOf("ООП" to 2, "китайский" to 1), column("2026-09-02"))   // ср
+        assertEquals(listOf("-" to 1, "вторая" to 1, "-" to 1), column("2026-08-31"))
+    }
+
     @Test fun `выключенные типы не стреляют`() {
         assertEquals(null, nextEvent(s, LocalDateTime.parse("2026-08-31T12:00"),
             false, digestAt, false, 5))
