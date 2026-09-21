@@ -63,8 +63,9 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-val DAYS = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница")
-val DAYS_SHORT = listOf("Пн", "Вт", "Ср", "Чт", "Пт")
+// Суббота и воскресенье - только под перенесённые учебные дни.
+val DAYS = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье")
+val DAYS_SHORT = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
 private val HEADER_FMT = DateTimeFormatter.ofPattern("EEE, d MMMM", Locale("ru"))
 
@@ -93,7 +94,8 @@ fun App() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     var klass by remember { mutableStateOf(prefs.klass) }
-    val schedule = remember(klass) { Schedule.load(ctx, klass) }
+    var settingsRev by remember { mutableStateOf(0) }   // переносы правятся в настройках
+    val schedule = remember(klass, settingsRev) { Schedule.load(ctx, klass) }
     var tab by remember { mutableStateOf(0) }
     var picked by remember { mutableStateOf<Pair<Lesson, LocalDate>?>(null) }
     var notesRev by remember { mutableStateOf(0) }   // чтобы заметки перерисовались после правки
@@ -138,7 +140,7 @@ fun App() {
                     else -> SettingsScreen(
                         prefs, klass,
                         onKlass = { klass = it; prefs.klass = it },
-                        onChanged = { Notifier.schedule(ctx) },
+                        onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
                     )
                 }
             }

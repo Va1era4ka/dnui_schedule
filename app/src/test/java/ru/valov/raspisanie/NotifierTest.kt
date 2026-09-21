@@ -91,6 +91,23 @@ class NotifierTest {
         )
     }
 
+    @Test fun `перенос делает выходной учебным днём, а праздник - пустым`() {
+        val shifted = Schedule(
+            LocalDate.parse("2026-08-31"), s.lessons,
+            mapOf(
+                LocalDate.parse("2026-09-20") to 1,   // вс: пары за понедельник
+                LocalDate.parse("2026-10-05") to 0,   // пн: праздник
+            ),
+        )
+        assertTrue(s.on(LocalDate.parse("2026-09-20")).isEmpty())
+        assertEquals(
+            listOf("первая", "вторая"),
+            shifted.on(LocalDate.parse("2026-09-20")).map { it.name },
+        )
+        assertEquals(2, s.on(LocalDate.parse("2026-10-05")).size)
+        assertTrue(shifted.on(LocalDate.parse("2026-10-05")).isEmpty())
+    }
+
     @Test fun `выключенные типы не стреляют`() {
         assertEquals(null, nextEvent(s, LocalDateTime.parse("2026-08-31T12:00"),
             false, digestAt, false, 5))

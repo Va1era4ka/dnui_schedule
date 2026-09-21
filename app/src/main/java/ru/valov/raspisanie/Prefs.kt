@@ -30,6 +30,18 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("leadMin", 5)
         set(v) = sp.edit().putInt("leadMin", v).apply()
 
+    /**
+     * Правки расписания: дата -> чьи пары идут (0 = выходной).
+     * ponytail: набор строк «2026-09-20=1»; на десяток дат в семестре хватает.
+     */
+    var shifts: Map<LocalDate, Int>
+        get() = (sp.getStringSet("shifts", null) ?: emptySet()).associate {
+            val (d, day) = it.split("=")
+            LocalDate.parse(d) to day.toInt()
+        }
+        set(v) = sp.edit()
+            .putStringSet("shifts", v.map { "" + it.key + "=" + it.value }.toSet()).apply()
+
     // Заметка привязана к конкретной дате, а не к паре вообще:
     // домашка на четверг не должна висеть на следующей неделе.
     fun note(id: String, date: LocalDate): String = sp.getString("note:$id:$date", "") ?: ""

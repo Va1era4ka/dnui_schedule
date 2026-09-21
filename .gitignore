@@ -20,3 +20,6 @@ keystore-secrets.txt
 
 # собранные APK
 *.apk
+
+# Граф кода graphify - локальный артефакт, пересобирается командой
+graphify-out/

@@ -42,7 +42,12 @@ fun shortCode(name: String): String {
 /** A6-413 -> 413, а спорткомплекс оставляем как есть - ячейка обрежет сама. */
 fun shortRoom(room: String): String = room.substringAfterLast('-')
 
-class Schedule(private val week1Monday: LocalDate, val lessons: List<Lesson>) {
+class Schedule(
+    private val week1Monday: LocalDate,
+    val lessons: List<Lesson>,
+    /** Правки расписания: дата -> чьи пары идут. 1 = понедельник, 0 = выходной. */
+    private val shifts: Map<LocalDate, Int> = emptyMap(),
+) {
 
     /** Предметы в стабильном порядке - по нему выбирается цвет предмета. */
     val subjects: List<String> = lessons.map { it.nameRu }.distinct().sorted()
@@ -58,9 +63,15 @@ class Schedule(private val week1Monday: LocalDate, val lessons: List<Lesson>) {
 
     fun mondayOf(week: Int): LocalDate = week1Monday.plusDays((week - 1) * 7L)
 
+    /**
+     * Пары на дату. Перенос делает воскресенье понедельником, праздник - пустым днём.
+     * ponytail: неделя берётся по самой дате; понадобится «пары за пятницу
+     * пятой недели» - храни в переносе ещё и номер недели.
+     */
     fun on(date: LocalDate): List<Lesson> {
+        val day = shifts[date] ?: date.dayOfWeek.value
+        if (day == 0) return emptyList()
         val week = weekOf(date)
-        val day = date.dayOfWeek.value
         return lessons
             .filter { it.day == day && week >= it.weekFrom && week <= it.weekTo }
             .sortedBy { it.start }
@@ -109,7 +120,9 @@ class Schedule(private val week1Monday: LocalDate, val lessons: List<Lesson>) {
                 )
             }
             val meta = root.getJSONObject("meta")
-            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons)
+            return Schedule(
+                LocalDate.parse(meta.getString("week1_monday")), lessons, Prefs(ctx).shifts
+            )
         }
     }
 }

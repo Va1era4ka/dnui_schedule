@@ -1,7 +1,9 @@
 package ru.valov.raspisanie
 
 import android.app.AlarmManager
+import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -33,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -77,7 +80,9 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
     val today = now.toLocalDate()
     var week by rememberSaveable { mutableStateOf(schedule.weekOf(today)) }
     val monday = schedule.mondayOf(week)
-    val days = (0..4).map { monday.plusDays(it.toLong()) }
+    // Сб и Вс в сетке появляются, только если туда перенесли учебный день.
+    val days = (0..6).map { monday.plusDays(it.toLong()) }
+        .filter { it.dayOfWeek.value <= 5 || schedule.on(it).isNotEmpty() }
 
     Column(
         Modifier
@@ -91,7 +96,7 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
         ) {
             Text("Неделя", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             Text(
-                monday.format(DATE_FMT) + " – " + monday.plusDays(4).format(DATE_FMT),
+                monday.format(DATE_FMT) + " – " + days.last().format(DATE_FMT),
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant,
             )
@@ -126,7 +131,7 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(32.dp))
-            days.forEachIndexed { i, d ->
+            days.forEach { d ->
                 val isToday = d == today
                 Box(
                     Modifier
@@ -137,7 +142,7 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        DAYS_SHORT[i], fontSize = 12.sp,
+                        DAYS_SHORT[d.dayOfWeek.value - 1], fontSize = 12.sp,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
                         color = if (isToday) cs.onPrimary else cs.onSurfaceVariant,
                     )
@@ -419,7 +424,7 @@ fun LessonScreen(
 
         val week = schedule.weekOf(date)
         val monday = schedule.mondayOf(week)
-        val more = (0..4).map { monday.plusDays(it.toLong()) }
+        val more = (0..6).map { monday.plusDays(it.toLong()) }
             .flatMap { d -> schedule.on(d).filter { it.nameRu == l.nameRu && !(it.id == l.id && d == date) }.map { it to d } }
         if (more.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
@@ -488,6 +493,9 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
     var digestAt by remember { mutableStateOf(prefs.digestAt) }
     var nextUpOn by remember { mutableStateOf(prefs.nextUpOn) }
     var lead by remember { mutableStateOf(prefs.leadMin) }
+    var shifts by remember { mutableStateOf(prefs.shifts) }
+    var pending by remember { mutableStateOf<LocalDate?>(null) }   // дата ждёт выбора дня
+    val save: (Map<LocalDate, Int>) -> Unit = { shifts = it; prefs.shifts = it; onChanged() }
     val scope = rememberCoroutineScope()
     var update by remember { mutableStateOf("Версия " + Updater.installed(ctx)) }
 
@@ -516,6 +524,78 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
                     { onKlass(it + 1); onChanged() },
                     Modifier.width(130.dp),
                 )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        SectionLabel("Переносы и выходные")
+        SettingsBlock {
+            if (shifts.isEmpty()) {
+                Text(
+                    "Пары идут по обычной сетке",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp),
+                )
+            }
+            shifts.toSortedMap().forEach { (d, day) ->
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                        Text(
+                            DAYS_SHORT[d.dayOfWeek.value - 1] + ", " + d.format(DATE_FMT),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            if (day == 0) "выходной" else "пары за " + DAYS[day - 1].lowercase(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
+                    IconButton({ save(shifts - d) }) {
+                        Icon(Icons.Default.Close, "Убрать", Modifier.size(18.dp))
+                    }
+                }
+            }
+            InfoDivider()
+            val date = pending
+            if (date == null) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                    TextButton(
+                        {
+                            pickDate(ctx, "Выходные с какого дня", LocalDate.now()) { from ->
+                                pickDate(ctx, "По какой день, с " + from.format(DATE_FMT), from) { to ->
+                                    val a = minOf(from, to)
+                                    val b = maxOf(from, to)
+                                    save(shifts + generateSequence(a) { it.plusDays(1) }
+                                        .takeWhile { !it.isAfter(b) }.associateWith { 0 })
+                                }
+                            }
+                        },
+                        Modifier.weight(1f),
+                    ) { Text("Выходные") }
+                    TextButton(
+                        { pickDate(ctx, "Учебный день", LocalDate.now()) { pending = it } },
+                        Modifier.weight(1f),
+                    ) { Text("Учебный день") }
+                }
+            } else {
+                Column(Modifier.padding(start = 18.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            date.format(DATE_FMT) + " — пары за",
+                            Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                        )
+                        TextButton({ pending = null }) { Text("Отмена") }
+                    }
+                    Segmented(
+                        DAYS_SHORT.take(5), -1,
+                        { save(shifts + (date to (it + 1))); pending = null },
+                        Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
 
@@ -604,6 +684,17 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
             }
         }
     }
+}
+
+/**
+ * Системный календарь - свой пикер не нужен. ponytail: заголовок диалога
+ * подсказывает, какой конец диапазона выбираем; хватает для пары дат в семестр.
+ */
+private fun pickDate(ctx: Context, title: String, initial: LocalDate, onPick: (LocalDate) -> Unit) {
+    DatePickerDialog(
+        ctx, { _, y, m, d -> onPick(LocalDate.of(y, m + 1, d)) },
+        initial.year, initial.monthValue - 1, initial.dayOfMonth,
+    ).apply { setTitle(title) }.show()
 }
 
 @Composable
