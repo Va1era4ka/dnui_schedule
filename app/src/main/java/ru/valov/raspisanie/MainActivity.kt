@@ -1,66 +1,85 @@
 package ru.valov.raspisanie
 
 import android.Manifest
-import android.app.AlarmManager
-import android.app.TimePickerDialog
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import java.time.Duration
 import java.time.LocalDate
-import java.time.LocalTime
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val DAYS = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница")
-private val DATE_FMT = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
+val DAYS = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница")
+val DAYS_SHORT = listOf("Пн", "Вт", "Ср", "Чт", "Пт")
+val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
+private val HEADER_FMT = DateTimeFormatter.ofPattern("EEE, d MMMM", Locale("ru"))
+
+/** Сколько осталось словами: 68 -> «1 ч 08 мин». */
+fun humanMinutes(minutes: Long): String =
+    if (minutes >= 60) "" + minutes / 60 + " ч " + (minutes % 60).toString().padStart(2, '0') + " мин"
+    else "" + minutes + " мин"
+
+private fun minutesUntil(from: java.time.LocalTime, to: java.time.LocalTime): Long =
+    (Duration.between(from, to).seconds + 59) / 60
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { App() } }
+        setContent { AppTheme { App() } }
     }
 
     override fun onResume() {
@@ -69,18 +88,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     var klass by remember { mutableStateOf(prefs.klass) }
     val schedule = remember(klass) { Schedule.load(ctx, klass) }
-    val today = remember { LocalDate.now() }
-    var week by remember { mutableStateOf(schedule.weekOf(today)) }
-    var settings by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(0) }
     var picked by remember { mutableStateOf<Pair<Lesson, LocalDate>?>(null) }
-    var notesRev by remember { mutableStateOf(0) }   // чтобы список перерисовался после правки
+    var notesRev by remember { mutableStateOf(0) }   // чтобы заметки перерисовались после правки
+
+    // ponytail: часы тикают раз в полминуты - для «осталось N мин» точнее не нужно.
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            now = LocalDateTime.now()
+        }
+    }
 
     val askNotify = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -90,224 +115,327 @@ fun App() {
         Notifier.schedule(ctx)
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("Неделя " + week) },
-            navigationIcon = {
-                TextButton(onClick = { week -= 1 }) { Text("<", fontSize = 22.sp) }
-            },
-            actions = {
-                TextButton(onClick = { week = schedule.weekOf(LocalDate.now()) }) { Text("Сегодня") }
-                TextButton(onClick = { week += 1 }) { Text(">", fontSize = 22.sp) }
-                TextButton(onClick = { settings = true }) { Text("Настр.") }
-            },
-        )
-    }) { pad ->
-        // ponytail: рисуем неделю целиком, ~20 строк - автоскролл к сегодня не нужен
-        LazyColumn(
-            Modifier
-                .padding(pad)
-                .fillMaxSize()
-        ) {
-            items(5) { i ->
-                val date = schedule.mondayOf(week).plusDays(i.toLong())
-                val lessons = schedule.on(date)
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    Text(
-                        DAYS[i] + ", " + date.format(DATE_FMT) +
-                            (if (date == today) " - сегодня" else ""),
-                        fontWeight = FontWeight.Bold,
-                        color = if (date == today) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(top = 20.dp, bottom = 6.dp),
-                    )
-                    if (lessons.isEmpty()) {
-                        Text("пар нет", color = MaterialTheme.colorScheme.outline)
-                    }
-                    lessons.forEach { l ->
-                        key(notesRev) {
-                            LessonRow(l, prefs.note(l.id, date)) { picked = l to date }
-                        }
-                    }
-                }
-            }
-            item { Spacer(Modifier.height(32.dp)) }
-        }
-    }
-
     val p = picked
     if (p != null) {
-        LessonDialog(p.first, p.second, prefs) { saved ->
-            picked = null
-            if (saved) notesRev += 1
-        }
-    }
-    if (settings) {
-        SettingsDialog(prefs, klass, onKlass = { klass = it; prefs.klass = it }) {
-            settings = false
-            Notifier.schedule(ctx)
+        BackHandler { picked = null }
+        LessonScreen(
+            schedule, prefs, p.first, p.second, now, notesRev,
+            onSaved = { notesRev += 1; Notifier.schedule(ctx) },
+            onBack = { picked = null },
+            onPick = { l, d -> picked = l to d },
+        )
+    } else {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = { NavBar(tab) { tab = it } },
+        ) { pad ->
+            Box(Modifier.padding(pad)) {
+                when (tab) {
+                    0 -> TodayScreen(schedule, klass, now, prefs, notesRev, { tab = 2 }) { l, d ->
+                        picked = l to d
+                    }
+                    1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
+                    else -> SettingsScreen(
+                        prefs, klass,
+                        onKlass = { klass = it; prefs.klass = it },
+                        onChanged = { Notifier.schedule(ctx) },
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun LessonRow(l: Lesson, note: String, onClick: () -> Unit) {
+private fun NavBar(tab: Int, onTab: (Int) -> Unit) {
+    val colors = NavigationBarItemDefaults.colors(
+        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+        NavigationBarItem(
+            tab == 0, { onTab(0) },
+            icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
+            label = { Text("Сегодня", fontSize = 12.sp) }, colors = colors,
+        )
+        NavigationBarItem(
+            tab == 1, { onTab(1) },
+            icon = { Icon(Icons.Default.DateRange, null) },
+            label = { Text("Неделя", fontSize = 12.sp) }, colors = colors,
+        )
+        NavigationBarItem(
+            tab == 2, { onTab(2) },
+            icon = { Icon(Icons.Default.Settings, null) },
+            label = { Text("Настройки", fontSize = 12.sp) }, colors = colors,
+        )
+    }
+}
+
+// ---------- Сегодня ----------
+
+private enum class Tile { PAST, NOW, NEXT, LATER }
+
+@Composable
+private fun TodayScreen(
+    schedule: Schedule,
+    klass: Int,
+    now: LocalDateTime,
+    prefs: Prefs,
+    notesRev: Int,
+    onSettings: () -> Unit,
+    onPick: (Lesson, LocalDate) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val date = now.toLocalDate()
+    val lessons = schedule.on(date)
+    val currentIdx = lessons.indexOfFirst { now.toLocalTime() < it.end }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 14.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        date.format(HEADER_FMT).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text("Сегодня", style = MaterialTheme.typography.headlineMedium)
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Chip("Класс " + klass, cs.primaryContainer, cs.onPrimaryContainer)
+                        Chip(
+                            "Неделя " + schedule.weekOf(date),
+                            cs.tertiaryContainer, cs.onTertiaryContainer,
+                        )
+                    }
+                }
+                Box(
+                    Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(cs.surfaceContainerHighest)
+                        .clickable(onClick = onSettings),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Default.Settings, "Настройки", tint = cs.onSurface)
+                }
+            }
+        }
+
+        if (lessons.isEmpty()) {
+            item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 40.dp)) {
+                    Text("Пар сегодня нет", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Ближайшие пары смотрите на вкладке «Неделя»",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        itemsIndexed(lessons) { i, l ->
+            val state = when {
+                i < currentIdx || currentIdx < 0 -> Tile.PAST
+                i > currentIdx -> Tile.LATER
+                now.toLocalTime() < l.start -> Tile.NEXT
+                else -> Tile.NOW
+            }
+            val prev = lessons.getOrNull(i - 1)
+            Column {
+                if (prev != null) BreakRow(Duration.between(prev.end, l.start).toMinutes())
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    verticalAlignment = if (state == Tile.PAST || state == Tile.LATER)
+                        Alignment.CenterVertically else Alignment.Top,
+                ) {
+                    Text(
+                        l.start.toString(),
+                        Modifier.width(46.dp).padding(top = if (state == Tile.PAST || state == Tile.LATER) 0.dp else 20.dp),
+                        textAlign = TextAlign.End,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (state == Tile.NOW || state == Tile.NEXT) cs.primary else cs.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    val note = remember(notesRev, l.id, date) { prefs.note(l.id, date) }
+                    when (state) {
+                        Tile.NOW, Tile.NEXT -> HeroTile(l, prev, now, state == Tile.NOW) {
+                            onPick(l, date)
+                        }
+                        Tile.PAST -> PastTile(l) { onPick(l, date) }
+                        Tile.LATER -> LaterTile(schedule, l, note) { onPick(l, date) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BreakRow(minutes: Long) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 78.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(16.dp).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "перемена " + humanMinutes(minutes),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Крупная карточка текущей пары - или отсчёта до следующей на перемене. */
+@Composable
+private fun HeroTile(
+    l: Lesson,
+    prev: Lesson?,
+    now: LocalDateTime,
+    running: Boolean,
+    onClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val t = now.toLocalTime()
+    val faded = cs.onPrimary.copy(alpha = 0.78f)
+    val fraction = if (running) {
+        val total = Duration.between(l.start, l.end).seconds.toFloat()
+        Duration.between(l.start, t).seconds / total
+    } else {
+        val from = prev?.end ?: t
+        val total = Duration.between(from, l.start).seconds.toFloat()
+        if (total <= 0f) 1f else Duration.between(from, t).seconds / total
+    }
     Column(
         Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(cs.primary)
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row {
-            Text(l.start.toString() + "-" + l.end, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.width(12.dp))
-            Text(l.nameRu, fontWeight = FontWeight.Medium)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Chip(if (running) "Идёт сейчас" else "Следующая", cs.onPrimary, cs.primary)
+            Spacer(Modifier.weight(1f))
+            Text(
+                l.start.toString() + " – " + l.end,
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = faded,
+            )
         }
-        Text(
-            l.name + "  " + l.roomRu + "  " + l.teacher,
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.outline,
-        )
-        if (note.isNotEmpty()) Text(note, fontSize = 13.sp)
-    }
-    HorizontalDivider()
-}
-
-@Composable
-private fun LessonDialog(
-    l: Lesson,
-    date: LocalDate,
-    prefs: Prefs,
-    onClose: (Boolean) -> Unit,
-) {
-    val ctx = LocalContext.current
-    var note by remember { mutableStateOf(prefs.note(l.id, date)) }
-    AlertDialog(
-        onDismissRequest = { onClose(false) },
-        title = { Text(l.nameRu) },
-        text = {
-            Column {
+        Column {
+            Text(
+                l.nameRu,
+                style = MaterialTheme.typography.titleLarge,
+                color = cs.onPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(l.roomRu + " · " + l.teacher, fontSize = 13.sp, color = faded, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column {
+            ProgressBar(fraction, cs.onPrimary.copy(alpha = 0.3f), cs.onPrimary)
+            Spacer(Modifier.height(11.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Text(
-                    l.name + "\n" + l.start + "-" + l.end + ", " + l.roomRu +
-                        "\nПреподаватель: " + l.teacher
+                    if (running) "Осталось " + humanMinutes(minutesUntil(t, l.end))
+                    else "Начало через " + humanMinutes(minutesUntil(t, l.start)),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = cs.onPrimary,
                 )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("Заметка на " + date.format(DATE_FMT)) },
-                    modifier = Modifier.fillMaxWidth(),
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (running) "до " + l.end else "в " + l.start,
+                    fontSize = 12.sp, color = faded,
                 )
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = {
-                    val uri = Uri.parse("geo:0,0?q=" + Uri.encode(l.mapQuery))
-                    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                        .onFailure {
-                            Toast.makeText(ctx, "Приложение карт не найдено", Toast.LENGTH_SHORT)
-                                .show()
-                        }
-                }) { Text("Показать " + l.building + " на карте") }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                prefs.setNote(l.id, date, note)
-                Notifier.schedule(ctx)
-                onClose(true)
-            }) { Text("Сохранить") }
-        },
-        dismissButton = { TextButton(onClick = { onClose(false) }) { Text("Отмена") } },
-    )
+        }
+    }
 }
 
 @Composable
-private fun SettingsDialog(
-    prefs: Prefs,
-    klass: Int,
-    onKlass: (Int) -> Unit,
-    onClose: () -> Unit,
-) {
-    val ctx = LocalContext.current
-    var digestOn by remember { mutableStateOf(prefs.digestOn) }
-    var digestAt by remember { mutableStateOf(prefs.digestAt) }
-    var nextUpOn by remember { mutableStateOf(prefs.nextUpOn) }
-    var lead by remember { mutableStateOf(prefs.leadMin) }
-    val scope = rememberCoroutineScope()
-    var update by remember { mutableStateOf("Версия " + Updater.installed(ctx)) }
-
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("Настройки") },
-        text = {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Класс", Modifier.weight(1f))
-                    FilterChip(klass == 1, { onKlass(1) }, { Text("1") })
-                    Spacer(Modifier.width(8.dp))
-                    FilterChip(klass == 2, { onKlass(2) }, { Text("2") })
-                }
-                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-
-                Toggle("Вечером - что завтра", digestOn) { digestOn = it; prefs.digestOn = it }
-                if (digestOn) {
-                    TextButton(onClick = {
-                        TimePickerDialog(ctx, { _, h, m ->
-                            digestAt = LocalTime.of(h, m)
-                            prefs.digestAt = digestAt
-                        }, digestAt.hour, digestAt.minute, true).show()
-                    }) { Text("Время: " + digestAt) }
-                }
-
-                Toggle("Перед концом пары - какая следующая", nextUpOn) {
-                    nextUpOn = it
-                    prefs.nextUpOn = it
-                }
-                if (nextUpOn) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("За " + lead + " мин", Modifier.weight(1f))
-                        listOf(5, 10, 15).forEach { m ->
-                            TextButton(onClick = { lead = m; prefs.leadMin = m }) { Text("" + m) }
-                        }
-                    }
-                }
-
-                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(update, Modifier.weight(1f), fontSize = 13.sp)
-                    TextButton(onClick = {
-                        update = "Проверяю..."
-                        scope.launch {
-                            update = runCatching { Updater.update(ctx) }
-                                .getOrElse {
-                                    "Ошибка обновления: " + (it.message ?: "нет сети")
-                                }
-                        }
-                    }) { Text("Обновить") }
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val am = ctx.getSystemService(AlarmManager::class.java)
-                    if (!am.canScheduleExactAlarms()) {
-                        Text(
-                            "Без разрешения уведомления могут опаздывать на ~15 минут:",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        TextButton(onClick = {
-                            ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                        }) { Text("Разрешить точные будильники") }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Готово") } },
-    )
+private fun PastTile(l: Lesson, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(cs.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                l.nameRu, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                l.roomRu, fontSize = 12.sp, color = cs.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+    }
 }
 
 @Composable
-private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f))
-        Switch(on, onChange)
+private fun LaterTile(schedule: Schedule, l: Lesson, note: String, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val dot = subjectColors(schedule.subjects.indexOf(l.nameRu)).second
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 86.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(cs.surfaceContainerLowest)
+            .border(1.dp, cs.outlineVariant, RoundedCornerShape(22.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                l.nameRu, style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    l.roomRu + " · " + l.teacher,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (note.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    note, style = MaterialTheme.typography.bodySmall,
+                    color = cs.onTertiaryContainer,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(cs.tertiaryContainer)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
+            Modifier.size(20.dp), tint = cs.onSurfaceVariant,
+        )
     }
 }

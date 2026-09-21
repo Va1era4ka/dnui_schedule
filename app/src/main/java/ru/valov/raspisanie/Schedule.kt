@@ -28,7 +28,29 @@ data class Lesson(
     val mapQuery: String get() = "$CAMPUS $building"
 }
 
+/**
+ * Короткий код предмета для сетки недели: аббревиатура из слов,
+ * готовое сокращение вроде ООП - как есть, одно слово - первые четыре буквы.
+ */
+fun shortCode(name: String): String {
+    val words = name.split(' ').filter { it.length > 2 && it.any { c -> c.isLetter() } }
+    words.firstOrNull { w -> w.all { !it.isLetter() || it.isUpperCase() } }?.let { return it }
+    return if (words.size >= 2) words.take(3).map { it.first().uppercaseChar() }.joinToString("")
+    else name.take(4)
+}
+
+/** A6-413 -> 413, а спорткомплекс оставляем как есть - ячейка обрежет сама. */
+fun shortRoom(room: String): String = room.substringAfterLast('-')
+
 class Schedule(private val week1Monday: LocalDate, val lessons: List<Lesson>) {
+
+    /** Предметы в стабильном порядке - по нему выбирается цвет предмета. */
+    val subjects: List<String> = lessons.map { it.nameRu }.distinct().sorted()
+
+    /** Номер пары -> её начало (пара 1 бывает и сдвоенной, берём раннее начало). */
+    val slots: List<Pair<Int, LocalTime>> =
+        lessons.groupBy { it.slot }.toSortedMap().map { (n, ls) -> n to ls.minOf { it.start } }
+
 
     /** Номер учебной недели. До начала семестра уходит в 0 и минус - так и надо. */
     fun weekOf(date: LocalDate): Int =
