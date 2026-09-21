@@ -76,6 +76,21 @@ class NotifierTest {
         )
     }
 
+    @Test fun `прошлая пара по предмету - ближайшая назад, а не первая в семестре`() {
+        val s2 = Schedule(
+            LocalDate.parse("2026-08-31"),
+            listOf(
+                lesson(1, 1, "08:00", "09:40", "мат"),
+                lesson(3, 1, "08:00", "09:40", "мат"),
+            ),
+        )
+        val wed2 = LocalDate.parse("2026-09-09")            // среда второй недели
+        assertEquals(
+            listOf(LocalDate.parse("2026-09-07"), LocalDate.parse("2026-09-02")),
+            s2.earlier(s2.on(wed2).first(), wed2).take(2).map { it.second }.toList(),
+        )
+    }
+
     @Test fun `выключенные типы не стреляют`() {
         assertEquals(null, nextEvent(s, LocalDateTime.parse("2026-08-31T12:00"),
             false, digestAt, false, 5))

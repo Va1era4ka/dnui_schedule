@@ -73,19 +73,21 @@ object Notifier {
     }
 
     fun text(e: Event, s: Schedule, prefs: Prefs): String = when (e) {
-        is Digest -> s.on(e.forDate).joinToString(NL) { l ->
-            line(l, prefs.note(l.id, e.forDate))
-        }
+        is Digest -> s.on(e.forDate).joinToString(NL) { l -> line(s, prefs, l, e.forDate) }
         is NextUp -> {
             val n = e.next
             if (n == null) e.current.nameRu + " скоро закончится, дальше пар нет"
-            else line(n, prefs.note(n.id, e.at.toLocalDate()))
+            else line(s, prefs, n, e.at.toLocalDate())
         }
     }
 
-    private fun line(l: Lesson, note: String): String {
+    /** Своя заметка на эту дату, а нет - что записали на прошлой такой паре. */
+    private fun line(s: Schedule, prefs: Prefs, l: Lesson, date: LocalDate): String {
         val head = l.start.toString() + " " + l.nameRu + " - " + l.roomRu
-        return if (note.isEmpty()) head else head + NL + "Заметка: " + note
+        val own = prefs.note(l.id, date)
+        if (own.isNotEmpty()) return head + NL + "Заметка: " + own
+        val last = prefs.lastNote(s, l, date) ?: return head
+        return head + NL + "С прошлой пары: " + last.second
     }
 
     fun notify(ctx: Context, e: Event, body: String) {

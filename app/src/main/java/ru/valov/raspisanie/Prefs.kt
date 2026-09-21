@@ -37,3 +37,9 @@ class Prefs(ctx: Context) {
     fun setNote(id: String, date: LocalDate, text: String) =
         sp.edit().putString("note:$id:$date", text.trim()).apply()
 }
+
+/** Заметка с ближайшей прошлой пары по тому же предмету: её дата и текст. */
+fun Prefs.lastNote(schedule: Schedule, l: Lesson, date: LocalDate): Pair<LocalDate, String>? =
+    schedule.earlier(l, date)
+        .map { (p, d) -> d to note(p.id, d) }
+        .firstOrNull { it.second.isNotEmpty() }

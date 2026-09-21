@@ -264,7 +264,13 @@ private fun TodayScreen(
                         color = if (state == Tile.NOW || state == Tile.NEXT) cs.primary else cs.onSurfaceVariant,
                     )
                     Spacer(Modifier.width(12.dp))
-                    val note = remember(notesRev, l.id, date) { prefs.note(l.id, date) }
+                    // своя заметка на сегодня, а нет - что записали на прошлой такой паре
+                    val note = remember(notesRev, l.id, date) {
+                        prefs.note(l.id, date).ifEmpty {
+                            prefs.lastNote(schedule, l, date)
+                                ?.let { "с прошлой пары: " + it.second } ?: ""
+                        }
+                    }
                     when (state) {
                         Tile.NOW, Tile.NEXT -> HeroTile(l, prev, now, state == Tile.NOW) {
                             onPick(l, date)

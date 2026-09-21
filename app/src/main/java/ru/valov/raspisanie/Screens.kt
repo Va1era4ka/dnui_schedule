@@ -387,6 +387,24 @@ fun LessonScreen(
             ) { Text("Сохранить", fontSize = 13.5.sp) }
         }
 
+        val last = remember(l.id, date, notesRev) { prefs.lastNote(schedule, l, date) }
+        if (last != null) {
+            Spacer(Modifier.height(18.dp))
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                SectionLabel("С прошлой пары · " + last.first.format(DATE_FMT))
+                Text(
+                    last.second,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onTertiaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cs.tertiaryContainer)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
+
         Spacer(Modifier.height(18.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
             SectionLabel("Заметка на " + date.format(DATE_FMT))

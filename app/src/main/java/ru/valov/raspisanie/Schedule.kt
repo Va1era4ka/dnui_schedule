@@ -66,6 +66,17 @@ class Schedule(private val week1Monday: LocalDate, val lessons: List<Lesson>) {
             .sortedBy { it.start }
     }
 
+    /**
+     * Прошлые занятия по тому же предмету, ближайшее первым - там пишут домашку
+     * к этой паре. ponytail: глубже трёх недель не смотрим, такое уже протухло.
+     */
+    fun earlier(l: Lesson, date: LocalDate): Sequence<Pair<Lesson, LocalDate>> =
+        (0..21).asSequence().flatMap { back ->
+            val d = date.minusDays(back.toLong())
+            on(d).filter { it.nameRu == l.nameRu && (d < date || it.start < l.start) }
+                .reversed().map { it to d }.asSequence()
+        }
+
     /** Пара, идущая прямо сейчас (для «до конца пары»). */
     fun current(now: LocalDateTime): Lesson? =
         on(now.toLocalDate()).firstOrNull {
