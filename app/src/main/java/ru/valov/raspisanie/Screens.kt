@@ -77,7 +77,7 @@ private val CELL_H = 90.dp
 private val CELL_GAP = 5.dp
 
 /** Высота плитки на [span] слотов - вместе со съеденными промежутками. */
-private fun cellHeight(span: Int) = CELL_H * span + CELL_GAP * (span - 1)
+private fun cellHeight(span: Int) = maxOf(span, 1).let { CELL_H * it + CELL_GAP * (it - 1) }
 
 @Composable
 fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDate) -> Unit) {
@@ -179,14 +179,14 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
             days.forEach { d ->
                 if (schedule.isHoliday(d)) {
                     HolidayCell(schedule.slots.size)
-                    return@forEach
-                }
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(CELL_GAP),
-                ) {
-                    schedule.column(d).forEach { (l, span) ->
-                        WeekCell(schedule, l, d, now, span, onPick)
+                } else {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(CELL_GAP),
+                    ) {
+                        schedule.column(d).forEach { (l, span) ->
+                            WeekCell(schedule, l, d, now, span, onPick)
+                        }
                     }
                 }
             }
