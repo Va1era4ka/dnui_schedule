@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
@@ -17,6 +18,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,8 +61,8 @@ private val DarkColors = darkColorScheme(
     onPrimaryContainer = Color(0xFFE8DEFF),
     secondaryContainer = Color(0xFF4B2FB0),
     onSecondaryContainer = Color(0xFFE8DEFF),
-    tertiaryContainer = Color(0xFFFFDCC0),
-    onTertiaryContainer = Color(0xFF5C3000),
+    tertiaryContainer = Color(0xFF432A14),
+    onTertiaryContainer = Color(0xFFFFD3B0),
     background = Color(0xFF131019),
     onBackground = Color(0xFFE9E1F3),
     surface = Color(0xFF131019),
@@ -105,12 +107,16 @@ private val AppTypography = Typography().let { d ->
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
+    val colors = if (isSystemInDarkTheme()) DarkColors else LightColors
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = colors,
         typography = AppTypography,
         shapes = AppShapes,
-        content = content,
-    )
+    ) {
+        // Экран пары открывается мимо Scaffold, а LocalContentColor по умолчанию чёрный:
+        // без этого Text и Icon без явного color на тёмной теме сливались с фоном.
+        CompositionLocalProvider(LocalContentColor provides colors.onSurface, content = content)
+    }
 }
 
 // Пастельная заливка + тёмный текст той же гаммы (контраст выше 7:1),
