@@ -39,6 +39,42 @@ fun shortCode(name: String): String {
     else name.take(4)
 }
 
+/** Правка расписания на подряд идущие даты: 1-7 октября - одна строка, а не семь. */
+data class ShiftRange(val from: LocalDate, val to: LocalDate, val day: Int) {
+
+    val dates: List<LocalDate>
+        get() = generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.toList()
+
+    /** «1–7 октября · выходные», «вс, 20 сентября · пары за понедельник». */
+    val label: String
+        get() {
+            val period = when {
+                from == to ->
+                    DAYS_SHORT[from.dayOfWeek.value - 1].lowercase() + ", " + from.format(DATE_FMT)
+                from.month == to.month -> "" + from.dayOfMonth + "–" + to.format(DATE_FMT)
+                else -> from.format(DATE_FMT) + " – " + to.format(DATE_FMT)
+            }
+            val what =
+                if (day != 0) "пары за " + DAYS[day - 1].lowercase()
+                else if (from == to) "выходной" else "выходные"
+            return period + " · " + what
+        }
+}
+
+/** Соседние даты с одинаковой правкой сливаются в один диапазон. */
+fun shiftRanges(shifts: Map<LocalDate, Int>): List<ShiftRange> {
+    val out = ArrayList<ShiftRange>()
+    shifts.toSortedMap().forEach { (d, day) ->
+        val last = out.lastOrNull()
+        if (last != null && last.day == day && last.to.plusDays(1) == d) {
+            out[out.lastIndex] = last.copy(to = d)
+        } else {
+            out.add(ShiftRange(d, d, day))
+        }
+    }
+    return out
+}
+
 /** A6-413 -> 413, а спорткомплекс оставляем как есть - ячейка обрежет сама. */
 fun shortRoom(room: String): String = room.substringAfterLast('-')
 
@@ -76,6 +112,9 @@ class Schedule(
             .filter { it.day == day && week >= it.weekFrom && week <= it.weekTo }
             .sortedBy { it.start }
     }
+
+    /** Дата помечена выходным - в сетке недели это одна плашка на весь день. */
+    fun isHoliday(date: LocalDate): Boolean = shifts[date] == 0
 
     /**
      * Прошлые занятия по тому же предмету, ближайшее первым - там пишут домашку

@@ -2,6 +2,7 @@ package ru.valov.raspisanie
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.LocalDate
 
 class UiTextTest {
 
@@ -18,6 +19,20 @@ class UiTextTest {
     fun `аудитория в ячейке - номер без корпуса`() {
         assertEquals("413", shortRoom("A6-413"))
         assertEquals("спорткомплекс", shortRoom("спорткомплекс"))
+    }
+
+    @Test
+    fun `подряд идущие правки расписания - одна строка`() {
+        val shifts = (1..7).associate { LocalDate.of(2026, 10, it) to 0 } +
+            mapOf(LocalDate.of(2026, 9, 20) to 1, LocalDate.of(2026, 10, 10) to 0)
+        assertEquals(
+            listOf(
+                "вс, 20 сентября · пары за понедельник",
+                "1–7 октября · выходные",
+                "сб, 10 октября · выходной",
+            ),
+            shiftRanges(shifts).map { it.label },
+        )
     }
 
     @Test

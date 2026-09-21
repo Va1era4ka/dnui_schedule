@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -73,6 +72,9 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 // ---------- Неделя ----------
+
+private val CELL_H = 90.dp
+private val CELL_GAP = 5.dp
 
 @Composable
 fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDate) -> Unit) {
@@ -150,22 +152,39 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
             }
         }
 
-        schedule.slots.forEach { (n, start) ->
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.5.dp).height(90.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+        // Сетка собирается колонками по дням: у выходного тогда одна плашка на всю высоту.
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.5.dp),
+            horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
+        ) {
+            Column(
+                Modifier.width(32.dp),
+                verticalArrangement = Arrangement.spacedBy(CELL_GAP),
+                horizontalAlignment = Alignment.End,
             ) {
-                Column(
-                    Modifier.width(32.dp).fillMaxHeight(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    Text("" + n, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(start.toString(), fontSize = 9.sp, color = cs.onSurfaceVariant)
+                schedule.slots.forEach { (n, start) ->
+                    Column(
+                        Modifier.height(CELL_H),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        Text("" + n, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(start.toString(), fontSize = 9.sp, color = cs.onSurfaceVariant)
+                    }
                 }
-                days.forEach { d ->
-                    val l = schedule.on(d).firstOrNull { it.slot == n }
-                    WeekCell(schedule, l, d, now, onPick)
+            }
+            days.forEach { d ->
+                if (schedule.isHoliday(d)) {
+                    HolidayCell(schedule.slots.size)
+                    return@forEach
+                }
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(CELL_GAP),
+                ) {
+                    schedule.slots.forEach { (n, _) ->
+                        WeekCell(schedule, schedule.on(d).firstOrNull { it.slot == n }, d, now, onPick)
+                    }
                 }
             }
         }
@@ -214,8 +233,30 @@ private fun StepButton(label: String, description: String, onClick: () -> Unit) 
     }
 }
 
+/** Помеченный выходной: 休息日 столбиком вместо четырёх пустых плиток. */
 @Composable
-private fun RowScope.WeekCell(
+private fun RowScope.HolidayCell(slots: Int) {
+    Column(
+        Modifier
+            .weight(1f)
+            .height(CELL_H * slots + CELL_GAP * (slots - 1))
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        "休息日".forEach { c ->
+            Text(
+                c.toString(),
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeekCell(
     schedule: Schedule,
     l: Lesson?,
     date: LocalDate,
@@ -225,7 +266,7 @@ private fun RowScope.WeekCell(
     val cs = MaterialTheme.colorScheme
     if (l == null) {
         Box(
-            Modifier.weight(1f).fillMaxHeight()
+            Modifier.fillMaxWidth().height(CELL_H)
                 .clip(RoundedCornerShape(14.dp)).background(cs.surfaceVariant)
         )
         return
@@ -235,8 +276,8 @@ private fun RowScope.WeekCell(
         now.toLocalTime() >= l.start && now.toLocalTime() < l.end
     Column(
         Modifier
-            .weight(1f)
-            .fillMaxHeight()
+            .fillMaxWidth()
+            .height(CELL_H)
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .then(if (running) Modifier.border(2.5.dp, cs.primary, RoundedCornerShape(14.dp)) else Modifier)
@@ -495,6 +536,7 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
     var lead by remember { mutableStateOf(prefs.leadMin) }
     var shifts by remember { mutableStateOf(prefs.shifts) }
     var pending by remember { mutableStateOf<LocalDate?>(null) }   // дата ждёт выбора дня
+    var showPast by remember { mutableStateOf(false) }
     val save: (Map<LocalDate, Int>) -> Unit = { shifts = it; prefs.shifts = it; onChanged() }
     val scope = rememberCoroutineScope()
     var update by remember { mutableStateOf("Версия " + Updater.installed(ctx)) }
@@ -530,6 +572,10 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
         Spacer(Modifier.height(16.dp))
         SectionLabel("Переносы и выходные")
         SettingsBlock {
+            // Прошедшие правки из памяти не выкидываем (по ним ищется прошлая пара),
+            // но в списке держим свёрнутыми - иначе он растёт весь семестр.
+            val today = remember { LocalDate.now() }
+            val (past, upcoming) = shiftRanges(shifts).partition { it.to.isBefore(today) }
             if (shifts.isEmpty()) {
                 Text(
                     "Пары идут по обычной сетке",
@@ -538,25 +584,17 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
                     modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp),
                 )
             }
-            shifts.toSortedMap().forEach { (d, day) ->
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            upcoming.forEach { r -> ShiftRow(r) { save(shifts - r.dates) } }
+            if (showPast) past.forEach { r -> ShiftRow(r, true) { save(shifts - r.dates) } }
+            if (past.isNotEmpty()) {
+                TextButton(
+                    { showPast = !showPast },
+                    Modifier.padding(start = 6.dp),
                 ) {
-                    Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                        Text(
-                            DAYS_SHORT[d.dayOfWeek.value - 1] + ", " + d.format(DATE_FMT),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            if (day == 0) "выходной" else "пары за " + DAYS[day - 1].lowercase(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = cs.onSurfaceVariant,
-                        )
-                    }
-                    IconButton({ save(shifts - d) }) {
-                        Icon(Icons.Default.Close, "Убрать", Modifier.size(18.dp))
-                    }
+                    Text(
+                        if (showPast) "Скрыть прошедшие" else "Прошедшие · " + past.size,
+                        fontSize = 13.sp,
+                    )
                 }
             }
             InfoDivider()
@@ -567,10 +605,8 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
                         {
                             pickDate(ctx, "Выходные с какого дня", LocalDate.now()) { from ->
                                 pickDate(ctx, "По какой день, с " + from.format(DATE_FMT), from) { to ->
-                                    val a = minOf(from, to)
-                                    val b = maxOf(from, to)
-                                    save(shifts + generateSequence(a) { it.plusDays(1) }
-                                        .takeWhile { !it.isAfter(b) }.associateWith { 0 })
+                                    val r = ShiftRange(minOf(from, to), maxOf(from, to), 0)
+                                    save(shifts + r.dates.associateWith { 0 })
                                 }
                             }
                         },
@@ -683,6 +719,23 @@ fun SettingsScreen(prefs: Prefs, klass: Int, onKlass: (Int) -> Unit, onChanged: 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ShiftRow(r: ShiftRange, faded: Boolean = false, onRemove: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            r.label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (faded) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.onSurface,
+        )
+        IconButton(onRemove) { Icon(Icons.Default.Close, "Убрать", Modifier.size(18.dp)) }
     }
 }
 
