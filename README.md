@@ -1,66 +1,39 @@
 # Расписание
 
-Оффлайн Android-приложение для расписания из `*课表.xlsx`. Сервера нет, интернета не требует.
+Оффлайн Android-приложение с расписанием пар: экран «Сегодня», листаемые дни,
+сетка недели, заметки к парам и локальные уведомления. Расписание зашито в APK,
+сеть нужна только чтобы обновить само приложение.
 
-## Что править руками
+Android 8+ (minSdk 26), Kotlin + Compose.
 
-| Что | Где |
-|---|---|
-| Понедельник 1-й недели семестра | `WEEK1_MONDAY` в [parse.py](parse.py) |
-| Названия предметов по-русски | словарь `RU` там же |
-| Строка поиска корпуса на карте | `CAMPUS` в [Schedule.kt](app/src/main/java/ru/valov/raspisanie/Schedule.kt) |
+## Установка
 
-## Уведомления
-
-Локальный `AlarmManager`, по одному будильнику на ближайшее событие — переживает
-перезагрузку и переустановку. Вся логика выбора события в функции `nextEvent`
-([Notifier.kt](app/src/main/java/ru/valov/raspisanie/Notifier.kt)), её проверяет
-[NotifierTest.kt](app/src/test/java/ru/valov/raspisanie/NotifierTest.kt).
-
-На Android 12+ в настройках приложения нужно разрешить «Будильники и напоминания»,
-иначе Doze может задержать уведомление минут на 15. Приложение само предложит.
-
-## Обновление
-
-Настройки → «Обновить». Версия берётся из последнего релиза на GitHub, APK качается
-с зеркала `svin-assets.hsryata.com/dnui-app-release/dnui-schedule-<версия>.apk`,
-при недоступности зеркала — с самого релиза. Если GitHub не ответил (репозиторий
-приватный, нет сети), ставится `dnui-schedule-latest.apk` с зеркала — версию тогда
-сравнить не с чем, это сделает сам установщик. Дальше APK отдаётся системному
-установщику, при первом разе Android попросит разрешить установку из приложения.
-Код — [Updater.kt](app/src/main/java/ru/valov/raspisanie/Updater.kt).
-
-## Сборка в CI
-
-[`.github/workflows/release.yml`](.github/workflows/release.yml) гоняет тесты, собирает
-подписанный release-APK, кладёт его в GitHub Releases и в Cloudflare R2.
-
-- **пуш в `master`** → APK только в R2 и артефактом к прогону, версия `master-<номер сборки>`
-- **тег `v1.2`** → обычный релиз `v1.2`
-- **вручную** → вкладка Actions, кнопка Run workflow
-
-В R2 каждая сборка ложится двумя объектами: с версией в имени и всегда свежий
-`dnui-schedule-latest.apk`. Ссылка на последнюю:
 <https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest.apk>
 
-### Секреты репозитория
+Дальше приложение обновляет себя само: Настройки → «Обновить».
 
-Settings → Secrets and variables → Actions:
+## Сборка
 
-| Секрет | Что это |
-|---|---|
-| `KEYSTORE_BASE64` | `release.jks` в base64 |
-| `KEYSTORE_PASSWORD` | пароль хранилища |
-| `KEY_ALIAS` | `dnui` |
-| `KEY_PASSWORD` | тот же пароль |
-| `R2_ACCOUNT_ID` | ID аккаунта Cloudflare |
-| `R2_ACCESS_KEY_ID` | из R2 API token |
-| `R2_SECRET_ACCESS_KEY` | из R2 API token |
-| `R2_BUCKET` | имя бакета |
+Нужен **JDK 17** — на более новых Kotlin DSL падает.
 
-**`release.jks` терять нельзя** — подписанные другим ключом APK не встанут поверх
-установленного, придётся сносить приложение вместе с заметками. Файл в `.gitignore`,
-копия лежит в секрете `KEYSTORE_BASE64`.
+```bash
+./gradlew test assembleRelease
+```
 
-Локально `assembleRelease` подписывается отладочным ключом, если переменных
-`KEYSTORE_*` в окружении нет.
+APK — в `app/build/outputs/apk/release/`. Локально подписывается отладочным ключом.
+
+## Расписание
+
+Лежит в `app/src/main/assets/schedule.1.json` и `schedule.2.json` (по классу),
+генерируется из файлов `*课表.xlsx`:
+
+```bash
+python parse.py
+```
+
+Поменялось расписание — заменил xlsx, перезапустил скрипт, пересобрал.
+
+## Остальное
+
+- [docs/schedule.md](docs/schedule.md) — что править руками, как работают уведомления
+- [docs/release.md](docs/release.md) — CI, секреты, обновление в приложении
