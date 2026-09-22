@@ -9,6 +9,13 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,10 +91,14 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
     val cs = MaterialTheme.colorScheme
     val today = now.toLocalDate()
     var week by rememberSaveable { mutableStateOf(schedule.weekOf(today)) }
-    val monday = schedule.mondayOf(week)
     // Сб и Вс в сетке появляются, только если туда перенесли учебный день.
-    val days = (0..6).map { monday.plusDays(it.toLong()) }
-        .filter { it.dayOfWeek.value <= 5 || schedule.on(it).isNotEmpty() }
+    fun daysOf(w: Int): List<LocalDate> {
+        val mon = schedule.mondayOf(w)
+        return (0..6).map { mon.plusDays(it.toLong()) }
+            .filter { it.dayOfWeek.value <= 5 || schedule.on(it).isNotEmpty() }
+    }
+    val monday = schedule.mondayOf(week)
+    val days = daysOf(week)
 
     Column(
         Modifier
@@ -130,62 +141,78 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
             StepButton("›", "Следующая неделя") { week += 1 }
         }
 
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(Modifier.width(32.dp))
-            days.forEach { d ->
-                val isToday = d == today
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height(26.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(if (isToday) cs.primary else Color.Transparent),
-                    contentAlignment = Alignment.Center,
+        // Сетка уезжает в сторону шага - видно, в какую сторону листаем.
+        AnimatedContent(
+            week,
+            transitionSpec = {
+                val dir =
+                    if (targetState > initialState) AnimatedContentTransitionScope.SlideDirection.Left
+                    else AnimatedContentTransitionScope.SlideDirection.Right
+                (slideIntoContainer(dir, tween(240)) + fadeIn(tween(240))) togetherWith
+                    (slideOutOfContainer(dir, tween(240)) + fadeOut(tween(240)))
+            },
+            label = "week",
+        ) { w ->
+            val shown = daysOf(w)
+            Column {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        DAYS_SHORT[d.dayOfWeek.value - 1], fontSize = 12.sp,
-                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
-                        color = if (isToday) cs.onPrimary else cs.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        // Сетка собирается колонками по дням: у выходного тогда одна плашка на всю высоту.
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.5.dp),
-            horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
-        ) {
-            Column(
-                Modifier.width(32.dp),
-                verticalArrangement = Arrangement.spacedBy(CELL_GAP),
-                horizontalAlignment = Alignment.End,
-            ) {
-                schedule.slots.forEach { (n, start) ->
-                    Column(
-                        Modifier.height(CELL_H),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.End,
-                    ) {
-                        Text("" + n, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text(start.toString(), fontSize = 9.sp, color = cs.onSurfaceVariant)
+                    Spacer(Modifier.width(32.dp))
+                    shown.forEach { d ->
+                        val isToday = d == today
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(26.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(if (isToday) cs.primary else Color.Transparent),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                DAYS_SHORT[d.dayOfWeek.value - 1], fontSize = 12.sp,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (isToday) cs.onPrimary else cs.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
-            }
-            days.forEach { d ->
-                if (schedule.isHoliday(d)) {
-                    HolidayCell(schedule.slots.size)
-                } else {
+
+                // Сетка собирается колонками по дням: у выходного тогда одна плашка на всю высоту.
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(CELL_GAP),
+                ) {
                     Column(
-                        Modifier.weight(1f),
+                        Modifier.width(32.dp),
                         verticalArrangement = Arrangement.spacedBy(CELL_GAP),
+                        horizontalAlignment = Alignment.End,
                     ) {
-                        schedule.column(d).forEach { (l, span) ->
-                            WeekCell(schedule, l, d, now, span, onPick)
+                        schedule.slots.forEach { (n, start) ->
+                            Column(
+                                Modifier.height(CELL_H),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.End,
+                            ) {
+                                Text("" + n, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(start.toString(), fontSize = 9.sp, color = cs.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    shown.forEachIndexed { i, d ->
+                        if (schedule.isHoliday(d)) {
+                            HolidayCell(schedule.slots.size)
+                        } else {
+                            Column(
+                                Modifier.weight(1f).appearIn(i),
+                                verticalArrangement = Arrangement.spacedBy(CELL_GAP),
+                            ) {
+                                schedule.column(d).forEach { (l, span) ->
+                                    WeekCell(schedule, l, d, now, span, onPick)
+                                }
+                            }
                         }
                     }
                 }
@@ -354,7 +381,7 @@ fun LessonScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (running) {
-                    Chip("Идёт сейчас", cs.primary, cs.onPrimary)
+                    Chip("Идёт сейчас", cs.primary, cs.onPrimary, Modifier.pulsing())
                     Spacer(Modifier.width(8.dp))
                 }
                 Text(
@@ -775,6 +802,8 @@ private fun SettingsBlock(content: @Composable () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            // Строки блока появляются по галочкам - блок тянется, а не прыгает.
+            .animateContentSize()
     ) { content() }
 }
 

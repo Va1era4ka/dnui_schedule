@@ -8,6 +8,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -121,32 +129,59 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
         Notifier.schedule(ctx)
     }
 
-    val p = picked
-    if (p != null) {
-        BackHandler { picked = null }
-        LessonScreen(
-            schedule, prefs, p.first, p.second, now, notesRev,
-            onSaved = { notesRev += 1; Notifier.schedule(ctx) },
-            onBack = { picked = null },
-            onPick = { l, d -> picked = l to d },
-        )
-    } else {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            bottomBar = { NavBar(tab) { tab = it } },
-        ) { pad ->
-            Box(Modifier.padding(pad)) {
-                when (tab) {
-                    0 -> TodayScreen(schedule, klass, now, prefs, notesRev, { tab = 2 }) { l, d ->
-                        picked = l to d
+    // BackHandler живёт снаружи: у уезжающего экрана пары он бы ещё ловил вторую «назад».
+    if (picked != null) BackHandler { picked = null }
+    // Пара въезжает справа поверх списка и так же уходит обратно.
+    AnimatedContent(
+        picked,
+        transitionSpec = {
+            if (targetState != null)
+                (slideInHorizontally(tween(260)) { it / 4 } + fadeIn(tween(200))) togetherWith
+                    fadeOut(tween(200))
+            else
+                fadeIn(tween(200)) togetherWith
+                    (slideOutHorizontally(tween(260)) { it / 4 } + fadeOut(tween(200)))
+        },
+        label = "lesson",
+    ) { p ->
+        if (p != null) {
+            LessonScreen(
+                schedule, prefs, p.first, p.second, now, notesRev,
+                onSaved = { notesRev += 1; Notifier.schedule(ctx) },
+                onBack = { picked = null },
+                onPick = { l, d -> picked = l to d },
+            )
+        } else {
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                bottomBar = { NavBar(tab) { tab = it } },
+            ) { pad ->
+                Box(Modifier.padding(pad)) {
+                    // Вкладки едут в сторону нажатой кнопки.
+                    AnimatedContent(
+                        tab,
+                        transitionSpec = {
+                            val dir =
+                                if (targetState > initialState) AnimatedContentTransitionScope.SlideDirection.Left
+                                else AnimatedContentTransitionScope.SlideDirection.Right
+                            (slideIntoContainer(dir, tween(220)) + fadeIn(tween(220))) togetherWith
+                                (slideOutOfContainer(dir, tween(220)) + fadeOut(tween(220)))
+                        },
+                        label = "tab",
+                    ) { current ->
+                        when (current) {
+                            0 -> TodayScreen(schedule, klass, now, prefs, notesRev, { tab = 2 }) { l, d ->
+                                picked = l to d
+                            }
+                            1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
+                            else -> SettingsScreen(
+                                prefs, klass, theme,
+                                onKlass = { klass = it; prefs.klass = it },
+                                onTheme = onTheme,
+                                onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
+                            )
+                        }
                     }
-                    1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
-                    else -> SettingsScreen(
-                        prefs, klass, theme,
-                        onKlass = { klass = it; prefs.klass = it },
-                        onTheme = onTheme,
-                        onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
-                    )
                 }
             }
         }
@@ -202,7 +237,7 @@ private fun TodayScreen(
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 14.dp)) {
+            Row(Modifier.appearIn(0).fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 14.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         date.format(HEADER_FMT).uppercase(),
@@ -235,7 +270,7 @@ private fun TodayScreen(
 
         if (lessons.isEmpty()) {
             item {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 40.dp)) {
+                Column(Modifier.appearIn(1).fillMaxWidth().padding(horizontal = 20.dp, vertical = 40.dp)) {
                     Text("Пар сегодня нет", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -255,7 +290,7 @@ private fun TodayScreen(
                 else -> Tile.NOW
             }
             val prev = lessons.getOrNull(i - 1)
-            Column {
+            Column(Modifier.appearIn(i + 1)) {
                 if (prev != null) BreakRow(Duration.between(prev.end, l.start).toMinutes())
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -337,7 +372,10 @@ private fun HeroTile(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Chip(if (running) "Идёт сейчас" else "Следующая", cs.onPrimary, cs.primary)
+            Chip(
+                if (running) "Идёт сейчас" else "Следующая", cs.onPrimary, cs.primary,
+                if (running) Modifier.pulsing() else Modifier,
+            )
             Spacer(Modifier.weight(1f))
             Text(
                 l.start.toString() + " – " + l.end,

@@ -1,6 +1,14 @@
 package ru.valov.raspisanie
 
 import android.app.Activity
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -20,18 +28,23 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import kotlinx.coroutines.delay
 
 // Токены из макета «Расписание пар - Android», артборд «Токены и компоненты».
 // ponytail: шрифты макета (Onest / Unbounded) не подключены - системный sans,
@@ -179,10 +192,10 @@ fun subjectColors(index: Int): Pair<Color, Color> {
 }
 
 @Composable
-fun Chip(text: String, bg: Color, fg: Color) {
+fun Chip(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier) {
     Text(
         text, color = fg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(bg)
             .padding(horizontal = 9.dp, vertical = 4.dp),
@@ -192,6 +205,8 @@ fun Chip(text: String, bg: Color, fg: Color) {
 /** Полоса хода пары: своя, чтобы держать цвета и скругления макета. */
 @Composable
 fun ProgressBar(fraction: Float, track: Color, fill: Color) {
+    // Часы тикают раз в полминуты: без этого полоса прыгала бы рывками.
+    val width by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(700), label = "progress")
     Box(
         Modifier
             .fillMaxWidth()
@@ -201,12 +216,43 @@ fun ProgressBar(fraction: Float, track: Color, fill: Color) {
     ) {
         Box(
             Modifier
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .fillMaxWidth(width)
                 .height(8.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(fill)
         )
     }
+}
+
+/**
+ * Плитка въезжает снизу с задержкой по месту в списке - список собирается на глазах.
+ * ponytail: задержка привязана к индексу; списки тут короткие, а уехавший за экран
+ * и вернувшийся элемент переиграет появление заново - ключи и состояние ради этого не заводим.
+ */
+@Composable
+fun Modifier.appearIn(index: Int): Modifier {
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(index * 45L)
+        shown.animateTo(1f, tween(260))
+    }
+    return graphicsLayer {
+        alpha = shown.value
+        translationY = (1f - shown.value) * 18.dp.toPx()
+    }
+}
+
+/**
+ * Метка идущей пары дышит - видно, что время живое.
+ * ponytail: пока она на экране, кадры идут непрерывно, поэтому вешаем только на «сейчас».
+ */
+@Composable
+fun Modifier.pulsing(): Modifier {
+    val pulse = rememberInfiniteTransition("pulse")
+    val fade by pulse.animateFloat(
+        0.55f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "alpha",
+    )
+    return graphicsLayer { alpha = fade }
 }
 
 @Composable
@@ -241,18 +287,26 @@ fun Segmented(
 
 @Composable
 private fun RowScope.SegmentedItem(text: String, on: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(
+        if (on) MaterialTheme.colorScheme.primary else Color.Transparent,
+        tween(180), label = "segment",
+    )
+    val fg by animateColorAsState(
+        if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        tween(180), label = "segmentText",
+    )
     Box(
         Modifier
             .weight(1f)
             .height(36.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(if (on) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .background(bg)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text,
-            color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            color = fg,
             fontSize = 13.5.sp,
             fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
         )
