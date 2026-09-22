@@ -37,3 +37,7 @@ python parse.py
 
 - [docs/schedule.md](docs/schedule.md) — что править руками, как работают уведомления
 - [docs/release.md](docs/release.md) — CI, секреты, обновление в приложении
+
+## Лицензия
+
+MIT, см. [LICENSE](LICENSE).
