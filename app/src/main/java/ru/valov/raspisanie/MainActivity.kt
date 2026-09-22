@@ -56,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -129,6 +130,9 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
     var tab by remember { mutableStateOf(0) }
     var picked by remember { mutableStateOf<Pair<Lesson, LocalDate>?>(null) }
     var notesRev by remember { mutableStateOf(0) }   // чтобы заметки перерисовались после правки
+    // Экран пары выкидывает вкладку из композиции: без этого пейджер дня
+    // и номер недели сбрасывались бы на сегодняшние при возврате назад.
+    val tabState = rememberSaveableStateHolder()
 
     // ponytail: часы тикают раз в полминуты - для «осталось N мин» точнее не нужно.
     var now by remember { mutableStateOf(LocalDateTime.now()) }
@@ -187,17 +191,19 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
                         },
                         label = "tab",
                     ) { current ->
-                        when (current) {
-                            0 -> TodayScreen(schedule, klass, now, prefs, notesRev, { tab = 2 }) { l, d ->
-                                picked = l to d
+                        tabState.SaveableStateProvider(current) {
+                            when (current) {
+                                0 -> TodayScreen(schedule, klass, now, prefs, notesRev, { tab = 2 }) { l, d ->
+                                    picked = l to d
+                                }
+                                1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
+                                else -> SettingsScreen(
+                                    prefs, klass, theme,
+                                    onKlass = { klass = it; prefs.klass = it },
+                                    onTheme = onTheme,
+                                    onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
+                                )
                             }
-                            1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
-                            else -> SettingsScreen(
-                                prefs, klass, theme,
-                                onKlass = { klass = it; prefs.klass = it },
-                                onTheme = onTheme,
-                                onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
-                            )
                         }
                     }
                 }
