@@ -51,12 +51,27 @@ class Prefs(ctx: Context) {
     // домашка на четверг не должна висеть на следующей неделе.
     fun note(id: String, date: LocalDate): String = sp.getString("note:$id:$date", "") ?: ""
 
-    fun setNote(id: String, date: LocalDate, text: String) =
-        sp.edit().putString("note:$id:$date", text.trim()).apply()
+    /** Докуда заметку видно на следующих парах. null - у заметок, написанных до этой версии. */
+    fun noteUntil(id: String, date: LocalDate): LocalDate? =
+        sp.getString("until:$id:$date", null)?.let(LocalDate::parse)
+
+    fun setNote(id: String, date: LocalDate, text: String, until: LocalDate?) =
+        sp.edit()
+            .putString("note:$id:$date", text.trim())
+            .putString("until:$id:$date", until?.toString())
+            .apply()
 }
 
-/** Заметка с ближайшей прошлой пары по тому же предмету: её дата и текст. */
-fun Prefs.lastNote(schedule: Schedule, l: Lesson, date: LocalDate): Pair<LocalDate, String>? =
-    schedule.earlier(l, date)
-        .map { (p, d) -> d to note(p.id, d) }
-        .firstOrNull { it.second.isNotEmpty() }
+/**
+ * Заметка с прошлой пары по тому же предмету: её дата и текст.
+ * Обычная видна только на следующей паре, помеченная «показывать до» - вплоть до той даты.
+ */
+fun Prefs.lastNote(schedule: Schedule, l: Lesson, date: LocalDate): Pair<LocalDate, String>? {
+    schedule.earlier(l, date).forEachIndexed { i, (p, d) ->
+        val text = note(p.id, d)
+        val until = noteUntil(p.id, d)
+        val visible = if (until != null) !date.isAfter(until) else i == 0
+        if (text.isNotEmpty() && visible) return d to text
+    }
+    return null
+}

@@ -91,6 +91,21 @@ class NotifierTest {
         )
     }
 
+    @Test fun `следующая пара по предмету - ближайшая вперёд, своя не в счёт`() {
+        val s2 = Schedule(
+            LocalDate.parse("2026-08-31"),
+            listOf(
+                lesson(1, 1, "08:00", "09:40", "мат"),
+                lesson(3, 1, "08:00", "09:40", "мат"),
+            ),
+        )
+        val wed = LocalDate.parse("2026-09-02")             // среда первой недели
+        assertEquals(
+            listOf(LocalDate.parse("2026-09-07"), LocalDate.parse("2026-09-09")),
+            s2.later(s2.on(wed).first(), wed).take(2).map { it.second }.toList(),
+        )
+    }
+
     @Test fun `перенос делает выходной учебным днём, а праздник - пустым`() {
         val shifted = Schedule(
             LocalDate.parse("2026-08-31"), s.lessons,

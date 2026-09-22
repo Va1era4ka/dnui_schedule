@@ -75,6 +75,9 @@ fun shiftRanges(shifts: Map<LocalDate, Int>): List<ShiftRange> {
     return out
 }
 
+/** Насколько далеко смотрим по предмету назад и вперёд: семестр, дальше домашку не задают. */
+private const val HORIZON = 120
+
 /** A6-413 -> 413, а спорткомплекс оставляем как есть - ячейка обрежет сама. */
 fun shortRoom(room: String): String = room.substringAfterLast('-')
 
@@ -137,13 +140,21 @@ class Schedule(
 
     /**
      * Прошлые занятия по тому же предмету, ближайшее первым - там пишут домашку
-     * к этой паре. ponytail: глубже трёх недель не смотрим, такое уже протухло.
+     * к этой паре. Докуда заметка живёт, решает её пометка, а не этот горизонт.
      */
     fun earlier(l: Lesson, date: LocalDate): Sequence<Pair<Lesson, LocalDate>> =
-        (0..21).asSequence().flatMap { back ->
+        (0..HORIZON).asSequence().flatMap { back ->
             val d = date.minusDays(back.toLong())
             on(d).filter { it.nameRu == l.nameRu && (d < date || it.start < l.start) }
                 .reversed().map { it to d }.asSequence()
+        }
+
+    /** Следующие занятия по тому же предмету, ближайшее первым - до какого показывать заметку. */
+    fun later(l: Lesson, date: LocalDate): Sequence<Pair<Lesson, LocalDate>> =
+        (0..HORIZON).asSequence().flatMap { ahead ->
+            val d = date.plusDays(ahead.toLong())
+            on(d).filter { it.nameRu == l.nameRu && (d > date || it.start > l.start) }
+                .map { it to d }.asSequence()
         }
 
     /** Пара, идущая прямо сейчас (для «до конца пары»). */

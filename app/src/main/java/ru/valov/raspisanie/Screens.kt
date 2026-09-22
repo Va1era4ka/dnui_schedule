@@ -13,6 +13,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -334,6 +335,13 @@ fun LessonScreen(
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     var note by remember(l.id, date, notesRev) { mutableStateOf(prefs.note(l.id, date)) }
+    // Даты следующих пар по этому предмету: докуда заметку показывать.
+    val upcoming = remember(l.id, date) {
+        schedule.later(l, date).map { it.second }.distinct().take(5).toList()
+    }
+    var until by remember(l.id, date, notesRev) {
+        mutableStateOf(prefs.noteUntil(l.id, date) ?: upcoming.firstOrNull())
+    }
     val t = now.toLocalTime()
     val running = date == now.toLocalDate() && t >= l.start && t < l.end
 
@@ -448,7 +456,7 @@ fun LessonScreen(
             ) { Text(l.building + " на карте", fontSize = 13.5.sp) }
             Button(
                 onClick = {
-                    prefs.setNote(l.id, date, note)
+                    prefs.setNote(l.id, date, note, until)
                     onSaved()
                 },
                 modifier = Modifier.weight(1f).height(52.dp),
@@ -484,6 +492,29 @@ fun LessonScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (upcoming.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                SectionLabel("Показывать до пары")
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    upcoming.forEach { d ->
+                        val on = d == until
+                        Text(
+                            d.format(DATE_FMT),
+                            color = if (on) cs.onPrimary else cs.onSurface,
+                            fontSize = 13.sp,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (on) cs.primary else cs.surfaceVariant)
+                                .clickable { until = d }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
         }
 
         val week = schedule.weekOf(date)
