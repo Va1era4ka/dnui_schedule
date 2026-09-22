@@ -9,13 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,6 +29,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +55,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,7 +85,14 @@ private fun cellHeight(span: Int) = maxOf(span, 1).let { CELL_H * it + CELL_GAP 
 fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDate) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val today = now.toLocalDate()
-    var week by rememberSaveable { mutableStateOf(schedule.weekOf(today)) }
+    val thisWeek = schedule.weekOf(today)
+    // Недели листаются вбок, кнопки ‹ › гонят тот же пейджер.
+    val pager = rememberPagerState(SWIPE_MID) { SWIPE_PAGES }
+    val scope = rememberCoroutineScope()
+    val week = thisWeek + pager.currentPage - SWIPE_MID
+    fun goTo(w: Int) {
+        scope.launch { pager.animateScrollToPage(SWIPE_MID + w - thisWeek) }
+    }
     // Сб и Вс в сетке появляются, только если туда перенесли учебный день.
     fun daysOf(w: Int): List<LocalDate> {
         val mon = schedule.mondayOf(w)
@@ -123,37 +125,27 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StepButton("‹", "Предыдущая неделя") { week -= 1 }
+            StepButton("‹", "Предыдущая неделя") { goTo(week - 1) }
             Box(
                 Modifier
                     .weight(1f)
                     .height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(cs.surfaceContainerHighest)
-                    .clickable { week = schedule.weekOf(today) },
+                    .clickable { goTo(thisWeek) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Неделя " + week + (if (week == schedule.weekOf(today)) " · текущая" else ""),
+                    "Неделя " + week + (if (week == thisWeek) " · текущая" else ""),
                     fontSize = 13.5.sp, fontWeight = FontWeight.Bold,
                 )
             }
-            StepButton("›", "Следующая неделя") { week += 1 }
+            StepButton("›", "Следующая неделя") { goTo(week + 1) }
         }
 
-        // Сетка уезжает в сторону шага - видно, в какую сторону листаем.
-        AnimatedContent(
-            week,
-            transitionSpec = {
-                val dir =
-                    if (targetState > initialState) AnimatedContentTransitionScope.SlideDirection.Left
-                    else AnimatedContentTransitionScope.SlideDirection.Right
-                (slideIntoContainer(dir, tween(240)) + fadeIn(tween(240))) togetherWith
-                    (slideOutOfContainer(dir, tween(240)) + fadeOut(tween(240)))
-            },
-            label = "week",
-        ) { w ->
-            val shown = daysOf(w)
+        HorizontalPager(pager) { page ->
+            val appear = page == pager.settledPage
+            val shown = daysOf(thisWeek + page - SWIPE_MID)
             Column {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -206,7 +198,7 @@ fun WeekScreen(schedule: Schedule, now: LocalDateTime, onPick: (Lesson, LocalDat
                             HolidayCell(schedule.slots.size)
                         } else {
                             Column(
-                                Modifier.weight(1f).appearIn(i),
+                                Modifier.weight(1f).appearIn(i, appear),
                                 verticalArrangement = Arrangement.spacedBy(CELL_GAP),
                             ) {
                                 schedule.column(d).forEach { (l, span) ->

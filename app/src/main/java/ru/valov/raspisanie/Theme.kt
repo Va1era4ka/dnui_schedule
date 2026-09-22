@@ -226,13 +226,16 @@ fun ProgressBar(fraction: Float, track: Color, fill: Color) {
 
 /**
  * Плитка въезжает снизу с задержкой по месту в списке - список собирается на глазах.
+ * [animate] = false показывает сразу: страницы листалки собираются прямо под пальцем,
+ * и въезд на них выглядел бы подгрузкой.
  * ponytail: задержка привязана к индексу; списки тут короткие, а уехавший за экран
  * и вернувшийся элемент переиграет появление заново - ключи и состояние ради этого не заводим.
  */
 @Composable
-fun Modifier.appearIn(index: Int): Modifier {
-    val shown = remember { Animatable(0f) }
+fun Modifier.appearIn(index: Int, animate: Boolean = true): Modifier {
+    val shown = remember { Animatable(if (animate) 0f else 1f) }
     LaunchedEffect(Unit) {
+        if (!animate) return@LaunchedEffect
         delay(index * 45L)
         shown.animateTo(1f, tween(260))
     }

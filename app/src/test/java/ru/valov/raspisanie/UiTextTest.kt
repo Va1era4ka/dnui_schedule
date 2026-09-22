@@ -36,6 +36,15 @@ class UiTextTest {
     }
 
     @Test
+    fun `заголовок дня - вчера, сегодня, завтра или день недели`() {
+        val today = LocalDate.of(2026, 9, 22)   // вторник
+        assertEquals("Сегодня", dayTitle(today, today))
+        assertEquals("Завтра", dayTitle(today.plusDays(1), today))
+        assertEquals("Вчера", dayTitle(today.minusDays(1), today))
+        assertEquals("Пятница", dayTitle(today.plusDays(3), today))
+    }
+
+    @Test
     fun `остаток времени - часы и минуты`() {
         assertEquals("48 мин", humanMinutes(48))
         assertEquals("1 ч 08 мин", humanMinutes(68))

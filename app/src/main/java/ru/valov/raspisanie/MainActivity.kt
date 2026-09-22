@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -76,6 +78,22 @@ val DAYS = listOf("Понедельник", "Вторник", "Среда", "Ч�
 val DAYS_SHORT = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
 private val HEADER_FMT = DateTimeFormatter.ofPattern("EEE, d MMMM", Locale("ru"))
+
+/**
+ * Листалка дней и недель: страница SWIPE_MID - сегодняшняя.
+ * ponytail: по году дней (и по семь лет недель) в каждую сторону - семестру хватает,
+ * бесконечный пейджер ради этого не нужен.
+ */
+const val SWIPE_PAGES = 730
+const val SWIPE_MID = SWIPE_PAGES / 2
+
+/** Заголовок дня: соседние дни - словами, дальше - день недели. */
+fun dayTitle(date: LocalDate, today: LocalDate): String = when (date) {
+    today -> "Сегодня"
+    today.plusDays(1) -> "Завтра"
+    today.minusDays(1) -> "Вчера"
+    else -> DAYS[date.dayOfWeek.value - 1]
+}
 
 /** Сколько осталось словами: 68 -> «1 ч 08 мин». */
 fun humanMinutes(minutes: Long): String =
@@ -230,14 +248,35 @@ private fun TodayScreen(
     onSettings: () -> Unit,
     onPick: (Lesson, LocalDate) -> Unit,
 ) {
+    val pager = rememberPagerState(SWIPE_MID) { SWIPE_PAGES }
+    HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+        DayScreen(
+            schedule, klass, now, now.toLocalDate().plusDays((page - SWIPE_MID).toLong()),
+            prefs, notesRev, page == pager.settledPage, onSettings, onPick,
+        )
+    }
+}
+
+@Composable
+private fun DayScreen(
+    schedule: Schedule,
+    klass: Int,
+    now: LocalDateTime,
+    date: LocalDate,
+    prefs: Prefs,
+    notesRev: Int,
+    appear: Boolean,
+    onSettings: () -> Unit,
+    onPick: (Lesson, LocalDate) -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
-    val date = now.toLocalDate()
+    val today = now.toLocalDate()
     val lessons = schedule.on(date)
     val currentIdx = lessons.indexOfFirst { now.toLocalTime() < it.end }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Row(Modifier.appearIn(0).fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 14.dp)) {
+            Row(Modifier.appearIn(0, appear).fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 14.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         date.format(HEADER_FMT).uppercase(),
@@ -245,7 +284,7 @@ private fun TodayScreen(
                         color = cs.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    Text("Сегодня", style = MaterialTheme.typography.headlineMedium)
+                    Text(dayTitle(date, today), style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Chip("Класс " + klass, cs.primaryContainer, cs.onPrimaryContainer)
@@ -270,11 +309,14 @@ private fun TodayScreen(
 
         if (lessons.isEmpty()) {
             item {
-                Column(Modifier.appearIn(1).fillMaxWidth().padding(horizontal = 20.dp, vertical = 40.dp)) {
-                    Text("Пар сегодня нет", style = MaterialTheme.typography.titleLarge)
+                Column(Modifier.appearIn(1, appear).fillMaxWidth().padding(horizontal = 20.dp, vertical = 40.dp)) {
+                    Text(
+                        if (date == today) "Пар сегодня нет" else "Пар в этот день нет",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Ближайшие пары смотрите на вкладке «Неделя»",
+                        "Листайте вбок — соседние дни",
                         style = MaterialTheme.typography.bodySmall,
                         color = cs.onSurfaceVariant,
                     )
@@ -284,13 +326,15 @@ private fun TodayScreen(
 
         itemsIndexed(lessons) { i, l ->
             val state = when {
+                date > today -> Tile.LATER
+                date < today -> Tile.PAST
                 i < currentIdx || currentIdx < 0 -> Tile.PAST
                 i > currentIdx -> Tile.LATER
                 now.toLocalTime() < l.start -> Tile.NEXT
                 else -> Tile.NOW
             }
             val prev = lessons.getOrNull(i - 1)
-            Column(Modifier.appearIn(i + 1)) {
+            Column(Modifier.appearIn(i + 1, appear)) {
                 if (prev != null) BreakRow(Duration.between(prev.end, l.start).toMinutes())
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 20.dp),
