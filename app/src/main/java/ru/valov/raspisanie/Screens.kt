@@ -73,7 +73,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.DayOfWeek
+import org.json.JSONObject
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -894,6 +894,9 @@ fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
     var klass by remember { mutableStateOf(Prefs(ctx).klass) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var parsed by remember { mutableStateOf<JSONObject?>(null) }   // файл прочитан, ждём номер недели
+    // Даты начала семестра в выгрузке нет. У всех групп DNUI она общая - её и предлагаем.
+    var week1 by remember { mutableStateOf(WEEK1_MONDAY) }
 
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -908,14 +911,7 @@ fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
             }
             busy = false
             r.onFailure { error = (it as? ScheduleFormatError)?.message ?: "Не получилось открыть файл" }
-            r.onSuccess { json ->
-                // Даты начала семестра в выгрузке нет. У всех групп DNUI она общая - её и предлагаем.
-                pickDate(ctx, "Понедельник первой недели", WEEK1_MONDAY) { d ->
-                    json.getJSONObject("meta").put("week1_monday", d.with(DayOfWeek.MONDAY).toString())
-                    Schedule.useFile(ctx, json)
-                    onDone()
-                }
-            }
+            r.onSuccess { parsed = it }
         }
     }
 
@@ -967,18 +963,57 @@ fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
         SectionLabel("Свой файл")
         SettingsBlock {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
-                    "Выгрузка расписания DNUI в xlsx: лист 课表, пары по строкам, дни по столбцам",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error) }
-                // ponytail: "*/*", а не MIME xlsx - мессенджеры сохраняют файлы с каким попало типом,
-                // и нужный оказался бы неактивным. Не-xlsx парсер отобьёт понятной ошибкой.
-                OutlinedButton(
-                    { pick.launch(arrayOf("*/*")) },
-                    Modifier.fillMaxWidth(),
-                    enabled = !busy,
-                ) { Text(if (busy) "Читаю файл…" else "Выбрать файл") }
+                val json = parsed
+                if (json == null) {
+                    Text(
+                        "Выгрузка расписания DNUI в xlsx: лист 课表, пары по строкам, дни по столбцам",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error) }
+                    // ponytail: "*/*", а не MIME xlsx - мессенджеры сохраняют файлы с каким попало типом,
+                    // и нужный оказался бы неактивным. Не-xlsx парсер отобьёт понятной ошибкой.
+                    OutlinedButton(
+                        { pick.launch(arrayOf("*/*")) },
+                        Modifier.fillMaxWidth(),
+                        enabled = !busy,
+                    ) { Text(if (busy) "Читаю файл…" else "Выбрать файл") }
+                } else {
+                    // Спрашиваем номер текущей недели, а не дату начала семестра:
+                    // его студенты знают, а дату - нет. Дата выводится из номера.
+                    val week = Schedule(week1, emptyList()).weekOf(LocalDate.now())
+                    Text(
+                        "Файл прочитан, пар в нём: " + json.getJSONArray("lessons").length(),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text("Какая сейчас учебная неделя?", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton({ week1 = week1.plusWeeks(1) }) { Text("−", fontSize = 24.sp) }
+                        Text(
+                            if (week >= 1) "$week-я" else "ещё не начался",
+                            Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        IconButton({ week1 = week1.minusWeeks(1) }) { Text("+", fontSize = 24.sp) }
+                    }
+                    Text(
+                        (if (week >= 1) "Семестр начался " else "Семестр начнётся ") +
+                            "в понедельник, " + week1.format(DATE_FMT),
+                        Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                    Button(
+                        {
+                            json.getJSONObject("meta").put("week1_monday", week1.toString())
+                            Schedule.useFile(ctx, json)
+                            onDone()
+                        },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("Готово") }
+                    TextButton({ parsed = null; pick.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth()) { Text("Другой файл") }
+                }
             }
         }
     }
