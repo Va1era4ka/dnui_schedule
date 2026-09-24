@@ -40,10 +40,16 @@ export async function accessUser(req: Request, env: Env): Promise<string | null>
     const c = decode(p);
     const now = Date.now() / 1000;
     const aud: unknown[] = Array.isArray(c.aud) ? c.aud : [c.aud];
-    if (c.iss !== `https://${env.ACCESS_TEAM}.cloudflareaccess.com`) return null;
-    if (!aud.includes(env.ACCESS_AUD) || !(c.exp > now) || (c.nbf && c.nbf > now + 60)) return null;
+    if (c.iss !== `https://${env.ACCESS_TEAM}.cloudflareaccess.com` || !aud.includes(env.ACCESS_AUD)) {
+      // подпись верна, но токен от другой команды/приложения - почти всегда опечатка в wrangler.toml
+      console.warn(`access: токен от ${c.iss}, ждём команду ${env.ACCESS_TEAM} и AUD из wrangler.toml`);
+      return null;
+    }
+    if (!(c.exp > now) || (c.nbf && c.nbf > now + 60)) return null;
     return c.email || c.common_name || null;
-  } catch {
+  } catch (e) {
+    // «access certs: 404» - в ACCESS_TEAM не имя команды Zero Trust
+    console.warn("access:", (e as Error).message);
     return null;
   }
 }

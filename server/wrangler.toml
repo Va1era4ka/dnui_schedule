@@ -23,5 +23,5 @@ APK_URL = "https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest
 # Вход в админку через Cloudflare Access (server/README.md): имя команды Zero Trust
 # (<team>.cloudflareaccess.com) и Application Audience (AUD) приложения Access.
 # Пока пусто - /v1/admin/* закрыт для всех.
-ACCESS_TEAM = "dnui-schedule"
+ACCESS_TEAM = "hsryata"
 ACCESS_AUD = "b146baa39287269858d055f1cbba9ace277e690d83d7e1b64809e5852404e7d1"
