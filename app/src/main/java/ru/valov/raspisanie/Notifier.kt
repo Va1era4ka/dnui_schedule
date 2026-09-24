@@ -93,16 +93,33 @@ object Notifier {
         is Soon -> line(s, prefs, e.lesson, e.at.toLocalDate())
     }
 
-    /** Своя заметка на эту дату, а нет - что записали на прошлой такой паре. */
-    private fun line(s: Schedule, prefs: Prefs, l: Lesson, date: LocalDate): String {
-        val head = l.start.toString() + " " + l.nameRu + " - " + l.roomRu
-        val own = prefs.note(l.id, date)
-        if (own.isNotEmpty()) return head + NL + "Заметка: " + own
-        val last = prefs.lastNote(s, l, date) ?: return head
-        return head + NL + "С прошлой пары: " + last.second
+    /**
+     * Строка в свёрнутом уведомлении. У дайджеста там счётчик заметок,
+     * иначе они видны только если развернуть.
+     */
+    fun summary(e: Event, s: Schedule, prefs: Prefs, body: String): String {
+        if (e !is Digest) return body.lineSequence().first()
+        val today = s.on(e.forDate)
+        val notes = today.count { noteLine(s, prefs, it, e.forDate) != null }
+        val first = "Первая пара в " + today.first().start
+        return if (notes == 0) first else "$first · заметок: $notes"
     }
 
-    fun notify(ctx: Context, e: Event, body: String) {
+    private fun line(s: Schedule, prefs: Prefs, l: Lesson, date: LocalDate): String {
+        val head = l.start.toString() + " " + l.nameRu + " - " + l.roomRu
+        val note = noteLine(s, prefs, l, date) ?: return head
+        return head + NL + note
+    }
+
+    /** Своя заметка на эту дату, а нет - что записали на прошлой такой паре. */
+    private fun noteLine(s: Schedule, prefs: Prefs, l: Lesson, date: LocalDate): String? {
+        val own = prefs.note(l.id, date)
+        if (own.isNotEmpty()) return "Заметка: " + own
+        val last = prefs.lastNote(s, l, date) ?: return null
+        return "С прошлой пары: " + last.second
+    }
+
+    fun notify(ctx: Context, e: Event, body: String, short: String) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, "Пары", NotificationManager.IMPORTANCE_HIGH)
@@ -114,7 +131,7 @@ object Notifier {
         val n = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
             .setContentTitle(title(e))
-            .setContentText(body.lineSequence().first())
+            .setContentText(short)
             .setStyle(Notification.BigTextStyle().bigText(body))
             .setContentIntent(open)
             .setAutoCancel(true)
@@ -155,7 +172,8 @@ class AlarmReceiver : BroadcastReceiver() {
             s, now.minusMinutes(1), prefs.digestOn, prefs.digestAt, prefs.nextUpOn, prefs.leadMin
         )
         if (e != null && !e.at.isAfter(now.plusMinutes(1))) {
-            Notifier.notify(ctx, e, Notifier.text(e, s, prefs))
+            val body = Notifier.text(e, s, prefs)
+            Notifier.notify(ctx, e, body, Notifier.summary(e, s, prefs, body))
         }
         Notifier.schedule(ctx)   // сразу заводим следующий
     }
