@@ -320,6 +320,7 @@ fun App(theme: Int, starts: Int, onTheme: (Int) -> Unit) {
                                     onKlass = { Schedule.useBundled(ctx, it); klass = it },
                                     onSource = { choosing = true },
                                     syncStatus = syncStatus,
+                                    groupShifts = schedule.groupShifts,
                                     onSync = sync,
                                     onTheme = onTheme,
                                     onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
@@ -500,7 +501,7 @@ private fun DayScreen(
                     }
                     val homework = remember(schedule, l.id, date) { schedule.homeworkFor(l, date)?.second ?: "" }
                     when (state) {
-                        Tile.NOW, Tile.NEXT -> HeroTile(l, prev, now, state == Tile.NOW) {
+                        Tile.NOW, Tile.NEXT -> HeroTile(l, prev, now, state == Tile.NOW, homework) {
                             onPick(l, date)
                         }
                         Tile.PAST -> PastTile(l) { onPick(l, date) }
@@ -535,6 +536,7 @@ private fun HeroTile(
     prev: Lesson?,
     now: LocalDateTime,
     running: Boolean,
+    homework: String,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -578,6 +580,21 @@ private fun HeroTile(
             )
             Spacer(Modifier.height(7.dp))
             Text(l.roomRu + " · " + l.teacher, fontSize = 13.sp, color = faded, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // к этой паре её и готовят - на крупной карточке домашку видно первой
+            if (homework.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "ДЗ: $homework",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(cs.onPrimary.copy(alpha = 0.16f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
         }
         Column {
             ProgressBar(fraction, cs.onPrimary.copy(alpha = 0.3f), cs.onPrimary)

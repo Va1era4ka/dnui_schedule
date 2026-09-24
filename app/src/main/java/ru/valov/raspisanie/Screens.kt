@@ -624,6 +624,7 @@ fun SettingsScreen(
     onSource: () -> Unit,
     syncStatus: String?,
     onSync: () -> Unit,
+    groupShifts: Map<LocalDate, Int>,
     onTheme: (Int) -> Unit,
     onChanged: () -> Unit,
 ) {
@@ -710,8 +711,12 @@ fun SettingsScreen(
             // Прошедшие правки из памяти не выкидываем (по ним ищется прошлая пара),
             // но в списке держим свёрнутыми - иначе он растёт весь семестр.
             val today = remember { LocalDate.now() }
-            val (past, upcoming) = shiftRanges(shifts).partition { it.to.isBefore(today) }
-            if (shifts.isEmpty()) {
+            // Выходные группы (с сервера) - в том же списке, но бледно и без крестика:
+            // убрать их может только редактор в админке.
+            val rows = (shiftRanges(shifts).map { it to false } + shiftRanges(groupShifts).map { it to true })
+                .sortedBy { it.first.from }
+            val (past, upcoming) = rows.partition { it.first.to.isBefore(today) }
+            if (rows.isEmpty()) {
                 Text(
                     "Пары идут по обычной сетке",
                     style = MaterialTheme.typography.bodySmall,
@@ -719,8 +724,8 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp),
                 )
             }
-            upcoming.forEach { r -> ShiftRow(r) { save(shifts - r.dates) } }
-            if (showPast) past.forEach { r -> ShiftRow(r, true) { save(shifts - r.dates) } }
+            upcoming.forEach { (r, group) -> ShiftRow(r, group, if (group) null else ({ save(shifts - r.dates) })) }
+            if (showPast) past.forEach { (r, group) -> ShiftRow(r, true, if (group) null else ({ save(shifts - r.dates) })) }
             if (past.isNotEmpty()) {
                 TextButton(
                     { showPast = !showPast },
@@ -863,7 +868,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun ShiftRow(r: ShiftRange, faded: Boolean = false, onRemove: () -> Unit) {
+private fun ShiftRow(r: ShiftRange, faded: Boolean, onRemove: (() -> Unit)?) {
     Row(
         Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -875,7 +880,16 @@ private fun ShiftRow(r: ShiftRange, faded: Boolean = false, onRemove: () -> Unit
             color = if (faded) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.onSurface,
         )
-        IconButton(onRemove) { Icon(Icons.Default.Close, "Убрать", Modifier.size(18.dp)) }
+        if (onRemove != null) {
+            IconButton(onRemove) { Icon(Icons.Default.Close, "Убрать", Modifier.size(18.dp)) }
+        } else {
+            Text(
+                "группа",
+                Modifier.padding(start = 8.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

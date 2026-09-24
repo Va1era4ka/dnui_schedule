@@ -101,10 +101,10 @@ object Sync {
     }
 
     /** Сверка с сервером при открытии приложения. true - расписание поменялось и уже сохранено. */
-    suspend fun refresh(ctx: Context): Boolean = withContext(Dispatchers.IO) {
+    suspend fun refresh(ctx: Context, timeoutMs: Int = 10_000): Boolean = withContext(Dispatchers.IO) {
         val p = Prefs(ctx)
         val code = p.group ?: return@withContext false
-        val fresh = fetch(p.server, code, p.etag)
+        val fresh = fetch(p.server, code, p.etag, timeoutMs)
         // пока качали, могли переключиться на другой источник - тогда ответ уже не нужен
         if (p.source != "server" || p.group != code) return@withContext false
         p.syncedAt = System.currentTimeMillis()
@@ -122,8 +122,8 @@ object Sync {
     }
 
     /** Расписание группы и его ETag; null - не менялось с [etag]. */
-    private fun fetch(server: String, code: String, etag: String?): Pair<JSONObject, String?>? {
-        val (status, body, newTag) = get("$server/v1/groups/$code", etag)
+    private fun fetch(server: String, code: String, etag: String?, timeoutMs: Int = 10_000): Pair<JSONObject, String?>? {
+        val (status, body, newTag) = get("$server/v1/groups/$code", etag, timeoutMs)
         return when (status) {
             304 -> null
             // сохраняем только то, что целиком разобралось: битый ответ не затрёт рабочее расписание
@@ -135,11 +135,11 @@ object Sync {
     }
 
     /** (код ответа, тело, ETag). Тело читаем только у 200. */
-    private fun get(url: String, etag: String?): Triple<Int, String, String?> {
+    private fun get(url: String, etag: String?, timeoutMs: Int = 10_000): Triple<Int, String, String?> {
         val c = URL(url).openConnection() as HttpURLConnection
         try {
-            c.connectTimeout = 10_000
-            c.readTimeout = 10_000
+            c.connectTimeout = timeoutMs
+            c.readTimeout = timeoutMs
             c.useCaches = false
             c.setRequestProperty("Accept", "application/json")
             if (etag != null) c.setRequestProperty("If-None-Match", etag)

@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
+import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -173,14 +174,38 @@ object Notifier {
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        // Перед дайджестом бывает сеть - не на главном потоке; goAsync держит приёмник живым.
+        val done = goAsync()
+        Thread {
+            try {
+                deliver(ctx)
+            } finally {
+                done.finish()
+            }
+        }.start()
+    }
+
+    private fun deliver(ctx: Context) {
         val prefs = Prefs(ctx)
-        val s = Schedule.load(ctx)
         // now минус минута: событие, ради которого нас разбудили, ещё "в будущем".
         val now = LocalDateTime.now()
-        val e = nextEvent(
+        fun due(s: Schedule) = nextEvent(
             s, now.minusMinutes(1), prefs.digestOn, prefs.digestAt, prefs.nextUpOn, prefs.leadMin
-        )
-        if (e != null && !e.at.isAfter(now.plusMinutes(1))) {
+        )?.takeIf { !it.at.isAfter(now.plusMinutes(1)) }
+
+        var s = Schedule.load(ctx)
+        var e = due(s)
+        // Вечерний дайджест - со свежей домашкой на завтра, даже если приложение сегодня не открывали.
+        // Таймаут короткий: нет сети - уходит по сохранённому. Уведомления о парах сеть не трогают:
+        // ночью и в Doze её режут, а опоздать им нельзя.
+        // ponytail: только дайджест; понадобится свежее и днём - периодический WorkManager.
+        if (e is Digest && prefs.source == "server" &&
+            runCatching { runBlocking { Sync.refresh(ctx, timeoutMs = 4_000) } }.getOrDefault(false)
+        ) {
+            s = Schedule.load(ctx)
+            e = due(s)
+        }
+        if (e != null) {
             val body = Notifier.text(e, s, prefs)
             Notifier.notify(ctx, e, body, Notifier.summary(e, s, prefs, body))
         }

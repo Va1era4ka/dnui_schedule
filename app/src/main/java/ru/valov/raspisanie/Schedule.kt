@@ -92,6 +92,8 @@ class Schedule(
     private val shifts: Map<LocalDate, Int> = emptyMap(),
     /** (id пары, дата, где задали) -> домашка. Бывает только у расписания с сервера. */
     private val homework: Map<Pair<String, LocalDate>, Homework> = emptyMap(),
+    /** Переносы с сервера - уже входят в [shifts], отдельно нужны настройкам: убрать их нельзя. */
+    val groupShifts: Map<LocalDate, Int> = emptyMap(),
 ) {
 
     /** Предметы в стабильном порядке - по нему выбирается цвет предмета. */
@@ -262,7 +264,7 @@ class Schedule(
                         Homework(o.getString("text"), until)
                 }
             } ?: emptyMap()
-            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, server + local, homework)
+            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, server + local, homework, server)
         }
     }
 }

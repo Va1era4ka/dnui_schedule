@@ -49,6 +49,8 @@ class SyncTest {
         val s = Schedule.parse(root, mapOf(LocalDate.parse("2026-10-02") to 5))
         assertTrue(s.isHoliday(LocalDate.parse("2026-10-01")))
         assertFalse(s.isHoliday(LocalDate.parse("2026-10-02")))
+        // настройкам - только серверные: свои там и так есть, с крестиком
+        assertEquals(setOf(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-02")), s.groupShifts.keys)
     }
 
     @Test fun `ссылки-приглашения - App Links нашего домена и raspisanie для любого сервера`() {
