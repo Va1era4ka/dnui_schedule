@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Силуэт корпуса с иконки приложения: башня, ротонда, ступени. Для строки состояния нужна одноцветная маска. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- башня -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.5,3h3v7h-3z" />
+    <!-- ротонда с дверью-вырезом -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M4,15V11Q12,6.5 20,11V15ZM10.5,12.5h3V15h-3z" />
+    <!-- ступени -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.5,16h13v1.3h-13zM3.5,18.3h17v1.3h-17zM1.5,20.6h21v1.4h-21z" />
+</vector>

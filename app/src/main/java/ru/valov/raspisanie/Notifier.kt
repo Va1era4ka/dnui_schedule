@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -129,7 +130,10 @@ object Notifier {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val n = Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+            // Маленькая иконка у Android - одноцветная маска, цветная картинка стала бы белым
+            // квадратом. Поэтому там силуэт, а сама иконка приложения крупная, в теле уведомления.
+            .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(Icon.createWithResource(ctx, R.mipmap.ic_launcher_bg))
             .setContentTitle(title(e))
             .setContentText(short)
             .setStyle(Notification.BigTextStyle().bigText(body))
