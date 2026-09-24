@@ -1,0 +1,66 @@
+import type { Lesson, Slot } from "./xlsx";
+
+/** Группа в списке админки. */
+export interface GroupInfo {
+  code: string;
+  title: string;
+  listed: number;
+  rev: number;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+/** Расписание группы - как его видит приложение (публичный GET). */
+export interface GroupData {
+  code: string;
+  title: string;
+  rev: number;
+  meta: { week1_monday: string; weeks: number };
+  slots: Slot[];
+  lessons: Lesson[];
+  shifts: Record<string, number>;
+  homework: { lesson: string; date: string; text: string; until: string | null }[];
+}
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let r: Response;
+  try {
+    r = await fetch(path, {
+      method,
+      // кончилась сессия Access - он отвечает редиректом на свою страницу входа, ловим его сами
+      redirect: "manual",
+      headers: body === undefined ? {} : { "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Нет связи с сервером", 0);
+  }
+  if (r.type === "opaqueredirect" || r.status === 401) {
+    throw new ApiError("Сессия входа закончилась - обновите страницу", 401);
+  }
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) return data as T;
+  if (r.status === 409) {
+    throw new ApiError("Расписание группы уже кто-то поменял - обновите страницу, чтобы не затереть его правки", 409);
+  }
+  throw new ApiError(data.message ?? (r.status === 404 ? "Не найдено" : `Ошибка сервера ${r.status}`), r.status);
+}
+
+export const api = {
+  me: () => call<{ email: string }>("GET", "/v1/admin/me"),
+  groups: () => call<{ groups: GroupInfo[] }>("GET", "/v1/admin/groups").then((r) => r.groups),
+  group: (code: string) => call<GroupData>("GET", `/v1/groups/${code}`),
+  create: (g: { title: string; week1_monday: string; listed: boolean; slots?: Slot[]; lessons?: Lesson[] }) =>
+    call<{ code: string; rev: number }>("POST", "/v1/admin/groups", g),
+  patch: (code: string, fields: { title?: string; week1_monday?: string; listed?: boolean }) =>
+    call<{ rev: number }>("PATCH", `/v1/admin/groups/${code}`, fields),
+  remove: (code: string) => call<unknown>("DELETE", `/v1/admin/groups/${code}`),
+  lessons: (code: string, rev: number, slots: Slot[], lessons: Lesson[]) =>
+    call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/lessons`, { rev, slots, lessons }),
+};

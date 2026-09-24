@@ -1,7 +1,12 @@
 # Сервер расписания
 
-Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admin/*`) — через Cloudflare Access.
-Контракт — [docs/api.md](../docs/api.md).
+Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admin/*`) и админка (`/admin/`) —
+через Cloudflare Access. Контракт — [docs/api.md](../docs/api.md).
+
+Админка — [admin/](admin): React + Vite + Tailwind, собирается в `public/admin` перед каждым
+`wrangler deploy`/`dev` и отдаётся тем же Worker. xlsx разбирается прямо в браузере
+([admin/src/xlsx.ts](admin/src/xlsx.ts) — копия `Xlsx.kt` из приложения, оба сверяются
+с эталонами в `fixtures/`).
 Бесплатного тарифа Cloudflare хватает с запасом.
 
 ## Разработка
@@ -9,11 +14,20 @@ Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admi
 Нужен Node 22+ (тестовый пакет Cloudflare на 20-й не поддерживается).
 
 ```bash
-npm install
-npm test            # тесты в рантайме Workers с локальной D1
+npm install         # заодно ставит зависимости admin/
+npm test            # Worker с локальной D1 + разбор xlsx в админке
 npm run typecheck
-npm run dev         # локально на http://127.0.0.1:8787, база в .wrangler/
+npm run dev         # http://localhost:8787, база в .wrangler/, админка на /admin/
 ```
+
+Локально Access нет: вход в админку берётся из `.dev.vars` (в git не попадает):
+
+```
+DEV_USER=me@localhost
+```
+
+Работает только на localhost. Правишь админку — в соседнем терминале
+`npm --prefix admin run dev` пересобирает её на лету, страницу достаточно обновить.
 
 Локальная база для `npm run dev`:
 
@@ -42,7 +56,7 @@ npx wrangler deploy
 curl https://dnui-schedule.hsryata.com/v1/groups
 ```
 
-Потом — только `npx wrangler deploy` после правок кода и
+Потом — только `npx wrangler deploy` после правок кода (админка соберётся сама) и
 `npx wrangler d1 migrations apply dnui-schedule --remote` после новых миграций.
 
 ## Вход в админку (Cloudflare Access)

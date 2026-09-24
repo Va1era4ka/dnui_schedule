@@ -22,6 +22,12 @@ const decode = (s: string) => JSON.parse(new TextDecoder().decode(bytes(s)));
 
 /** Кто пришёл: email из Access (у сервисного токена - его client id). null - не пустить. */
 export async function accessUser(req: Request, env: Env): Promise<string | null> {
+  // Локальный `wrangler dev`: Access там нет, вход подставляется из .dev.vars (DEV_USER=почта).
+  // Только для localhost - на боевом домене переменная ничего не откроет, даже если её задать.
+  const dev = (env as { DEV_USER?: string }).DEV_USER;
+  const host = new URL(req.url).hostname;
+  if (dev && (host === "localhost" || host === "127.0.0.1")) return dev;
+
   const token = req.headers.get("cf-access-jwt-assertion");
   // пока Access не настроен (пустые переменные) - админка закрыта для всех
   if (!token || !env.ACCESS_TEAM || !env.ACCESS_AUD) return null;

@@ -16,5 +16,6 @@ export default defineConfig({
       },
     })),
   ],
-  test: { setupFiles: ["./test/setup.ts"] },
+  // admin/ - отдельный пакет со своими тестами (npm --prefix admin test)
+  test: { include: ["test/**/*.test.ts"], setupFiles: ["./test/setup.ts"] },
 });

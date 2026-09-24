@@ -47,9 +47,10 @@ function page(title: string, body: string, status = 200): Response {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
 <style>
-:root { --bg: #fdf8f6; --fg: #231917; --muted: #6f5b56; --accent: #9a4524; --on-accent: #fff; --card: #f5e7e2; }
+/* цвета приложения (Theme.kt) */
+:root { --bg: #fbf8fd; --fg: #1b1723; --muted: #5f5869; --accent: #5a3dc4; --on-accent: #fff; --card: #ede7f2; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #1a1110; --fg: #f1dfda; --muted: #d8c2bc; --accent: #ffb59a; --on-accent: #5a1c03; --card: #322825; }
+  :root { --bg: #131019; --fg: #e9e1f3; --muted: #a9a0b8; --accent: #cfbcff; --on-accent: #341a9c; --card: #241f2f; }
 }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
 main { max-width: 420px; margin: 0 auto; padding: 40px 16px; }

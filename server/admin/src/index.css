@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* Цвета приложения (Theme.kt), светлая и тёмная схема - по системе. */
+:root {
+  --primary: #5a3dc4;
+  --on-primary: #ffffff;
+  --primary-container: #e5dcff;
+  --on-primary-container: #22005f;
+  --tertiary-container: #ffdcc0;
+  --on-tertiary-container: #5c3000;
+  --bg: #fbf8fd;
+  --fg: #1b1723;
+  --variant: #f4eff7;
+  --muted: #5f5869;
+  --lowest: #ffffff;
+  --highest: #ede7f2;
+  --outline-variant: #e6dfec;
+  --error: #b3261e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #cfbcff;
+    --on-primary: #341a9c;
+    --primary-container: #4b2fb0;
+    --on-primary-container: #e8deff;
+    --tertiary-container: #432a14;
+    --on-tertiary-container: #ffd3b0;
+    --bg: #131019;
+    --fg: #e9e1f3;
+    --variant: #1a1622;
+    --muted: #a9a0b8;
+    --lowest: #1a1622;
+    --highest: #241f2f;
+    --outline-variant: #2b2537;
+    --error: #ffb4ab;
+  }
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-on-tertiary-container: var(--on-tertiary-container);
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-variant: var(--variant);
+  --color-muted: var(--muted);
+  --color-lowest: var(--lowest);
+  --color-highest: var(--highest);
+  --color-outline-variant: var(--outline-variant);
+  --color-error: var(--error);
+}
+
+body {
+  @apply bg-bg text-fg antialiased;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}

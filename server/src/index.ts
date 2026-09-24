@@ -23,6 +23,7 @@ export default {
   async fetch(req, env): Promise<Response> {
     const path = new URL(req.url).pathname;
     if (path.startsWith("/v1/admin/")) return admin(req, env, path);
+    if (path === "/admin" || path.startsWith("/admin/")) return adminPage(req, env);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (req.method !== "GET") return pub({ error: "method_not_allowed" }, 405);
 
@@ -40,6 +41,17 @@ export default {
     return pub({ error: "not_found" }, 404);
   },
 } satisfies ExportedHandler<Env>;
+
+/** Статика админки. Неизвестный путь внутри /admin/ - её же index.html: маршруты рисует сама страница. */
+async function adminPage(req: Request, env: Env): Promise<Response> {
+  let r = await env.ASSETS.fetch(req);
+  if (r.status === 404) r = await env.ASSETS.fetch(new URL("/admin/", req.url));
+  r = new Response(r.body, r);
+  // админку нельзя встраивать в чужие страницы и подгружать в неё чужое
+  r.headers.set("content-security-policy", "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'");
+  r.headers.set("x-frame-options", "DENY");
+  return r;
+}
 
 async function group(req: Request, env: Env, code: string): Promise<Response> {
   // Одним батчем - это одна транзакция: rev, переносы и домашка из одного состояния базы.

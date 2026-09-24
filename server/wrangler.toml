@@ -7,6 +7,16 @@ compatibility_date = "2025-09-01"
 workers_dev = false
 routes = [{ pattern = "dnui-schedule.hsryata.com", custom_domain = true }]
 
+# Админка - статика из server/admin, собирается перед каждым deploy/dev. Отдаёт её сам Worker
+# (run_worker_first): так /v1/* и /g/* никогда не подменятся index.html. Путь /admin закрыт Access.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[build]
+command = "npm --prefix admin run build"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "dnui-schedule"
@@ -25,3 +35,9 @@ APK_URL = "https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest
 # Пока пусто - /v1/admin/* закрыт для всех.
 ACCESS_TEAM = "hsryata"
 ACCESS_AUD = "b146baa39287269858d055f1cbba9ace277e690d83d7e1b64809e5852404e7d1"
+
+# Локально Worker видел бы адрес боевого домена из routes - тогда не сработали бы ни вход
+# из .dev.vars (только для localhost), ни проверка Origin. Открывать http://localhost:8787/admin/
+[dev]
+port = 8787
+host = "localhost"

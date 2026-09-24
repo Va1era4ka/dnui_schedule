@@ -6,10 +6,11 @@
     "node": ">=22"
   },
   "scripts": {
+    "postinstall": "npm --prefix admin install",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "seed": "node scripts/seed.mjs",
-    "test": "vitest run",
+    "test": "vitest run && npm --prefix admin test",
     "typecheck": "wrangler types --strict-vars=false && tsc --noEmit"
   },
   "devDependencies": {
