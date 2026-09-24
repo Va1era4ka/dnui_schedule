@@ -5,6 +5,8 @@ Cloudflare Worker + D1. Пока только публичное чтение �
 
 ## Разработка
 
+Нужен Node 22+ (тестовый пакет Cloudflare на 20-й не поддерживается).
+
 ```bash
 npm install
 npm test            # тесты в рантайме Workers с локальной D1

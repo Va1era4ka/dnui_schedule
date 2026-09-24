@@ -10,5 +10,5 @@ routes = [{ pattern = "dnui-schedule.hsryata.com", custom_domain = true }]
 [[d1_databases]]
 binding = "DB"
 database_name = "dnui-schedule"
-database_id = "ВСТАВЬ_ИЗ_wrangler_d1_create"
+database_id = "d9c61e6d-05e8-4b49-9d74-24d9d82e390c"
 migrations_dir = "migrations"
