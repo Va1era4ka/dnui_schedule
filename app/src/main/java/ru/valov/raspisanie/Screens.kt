@@ -722,7 +722,7 @@ fun SettingsScreen(
                 }
             }
             InfoDivider()
-            SwitchRow("Перед концом пары", "какая пара следующая", nextUpOn) {
+            SwitchRow("О следующей паре", "до конца текущей и за 20 минут до первой", nextUpOn) {
                 nextUpOn = it
                 prefs.nextUpOn = it
                 onChanged()

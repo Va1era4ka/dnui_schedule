@@ -139,6 +139,21 @@ class NotifierTest {
         assertEquals(listOf("-" to 1, "вторая" to 1, "-" to 1), column("2026-08-31"))
     }
 
+    @Test fun `за 20 минут до первой пары и после большой перемены, но не после обычной`() {
+        val s2 = Schedule(
+            LocalDate.parse("2026-08-31"),
+            s.lessons + lesson(1, 3, "13:20", "15:00", "третья"),
+        )
+        fun at(now: String) = nextEvent(s2, LocalDateTime.parse(now), true, digestAt, true, 5)
+        val first = at("2026-08-31T06:00") as Soon
+        assertEquals(LocalDateTime.parse("2026-08-31T07:40"), first.at)
+        assertEquals("первая", first.lesson.name)
+        assertTrue(at("2026-08-31T09:45") is NextUp)            // перемена 20 минут
+        val big = at("2026-08-31T11:45") as Soon
+        assertEquals(LocalDateTime.parse("2026-08-31T13:00"), big.at)
+        assertEquals("третья", big.lesson.name)
+    }
+
     @Test fun `выключенные типы не стреляют`() {
         assertEquals(null, nextEvent(s, LocalDateTime.parse("2026-08-31T12:00"),
             false, digestAt, false, 5))

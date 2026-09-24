@@ -28,6 +28,11 @@ data class NextUp(
     val next: Lesson?,
 ) : Event
 
+/** За [SOON_MIN] минут до начала первой пары дня или пары после большой перемены. */
+data class Soon(override val at: LocalDateTime, val lesson: Lesson) : Event
+
+const val SOON_MIN = 20L
+
 /**
  * Ближайшее событие после [now]. Чистая функция - вся логика уведомлений тут,
  * поэтому её и проверяет NotifierTest.
@@ -56,6 +61,11 @@ fun nextEvent(
                     today.getOrNull(i + 1),
                 )
             )
+            // Обычная перемена 20 минут - там хватает NextUp с прошлой пары.
+            val prev = today.getOrNull(i - 1)
+            if (prev == null || prev.end.plusMinutes(SOON_MIN).isBefore(l.start)) {
+                events.add(Soon(date.atTime(l.start).minusMinutes(SOON_MIN), l))
+            }
         }
     }
     events
@@ -70,6 +80,7 @@ object Notifier {
     fun title(e: Event): String = when (e) {
         is Digest -> "Завтра"
         is NextUp -> if (e.next == null) "Последняя пара" else "Следующая пара"
+        is Soon -> "Через $SOON_MIN минут пара"
     }
 
     fun text(e: Event, s: Schedule, prefs: Prefs): String = when (e) {
@@ -79,6 +90,7 @@ object Notifier {
             if (n == null) e.current.nameRu + " скоро закончится, дальше пар нет"
             else line(s, prefs, n, e.at.toLocalDate())
         }
+        is Soon -> line(s, prefs, e.lesson, e.at.toLocalDate())
     }
 
     /** Своя заметка на эту дату, а нет - что записали на прошлой такой паре. */
