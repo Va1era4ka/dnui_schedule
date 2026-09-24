@@ -601,6 +601,7 @@ fun SettingsScreen(
     val save: (Map<LocalDate, Int>) -> Unit = { shifts = it; prefs.shifts = it; onChanged() }
     val scope = rememberCoroutineScope()
     var update by remember { mutableStateOf("Версия " + Updater.installed(ctx)) }
+    var autoUpdate by remember { mutableStateOf(prefs.autoUpdate) }
 
     Column(
         Modifier
@@ -758,6 +759,11 @@ fun SettingsScreen(
                             .getOrElse { "Ошибка обновления: " + (it.message ?: "нет сети") }
                     }
                 }) { Text("Обновить") }
+            }
+            InfoDivider()
+            SwitchRow("Проверять обновления", "раз в неделю, при выходе новой версии предложит обновиться", autoUpdate) {
+                autoUpdate = it
+                prefs.autoUpdate = it
             }
         }
 

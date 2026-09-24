@@ -35,6 +35,15 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("leadMin", 5)
         set(v) = sp.edit().putInt("leadMin", v).apply()
 
+    var autoUpdate: Boolean
+        get() = sp.getBoolean("autoUpdate", false)
+        set(v) = sp.edit().putBoolean("autoUpdate", v).apply()
+
+    /** Когда GitHub последний раз ответил на проверку обновлений, мс. */
+    var updateCheckedAt: Long
+        get() = sp.getLong("updateCheckedAt", 0)
+        set(v) = sp.edit().putLong("updateCheckedAt", v).apply()
+
     /**
      * Правки расписания: дата -> чьи пары идут (0 = выходной).
      * ponytail: набор строк «2026-09-20=1»; на десяток дат в семестре хватает.

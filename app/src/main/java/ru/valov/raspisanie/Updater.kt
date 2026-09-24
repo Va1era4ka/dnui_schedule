@@ -53,6 +53,23 @@ object Updater {
         "Ставим " + r.version
     }
 
+    /**
+     * Автопроверка: раз в неделю спрашивает GitHub, вышла ли новая версия.
+     * null - рано, нечего ставить или сеть не ответила (тогда спросим на следующем запуске).
+     * ponytail: проверка при открытии приложения, без WorkManager - его и так открывают каждый день.
+     */
+    suspend fun weekly(ctx: Context, prefs: Prefs): Release? = withContext(Dispatchers.IO) {
+        // master-<N> и dev новее любого релиза: «обновление» до релиза было бы откатом,
+        // который Android всё равно не поставит. Их обновляют кнопкой.
+        val v = installed(ctx)
+        if (v == "dev" || v.startsWith("master-")) return@withContext null
+        val now = System.currentTimeMillis()
+        if (now - prefs.updateCheckedAt < 7 * 24 * 3600_000L) return@withContext null
+        val r = runCatching { parse(get(API)) }.getOrNull() ?: return@withContext null
+        prefs.updateCheckedAt = now
+        r.takeIf { it.version != v }
+    }
+
     /** Скачанный APK после установки не нужен: зовётся по MY_PACKAGE_REPLACED. */
     fun clearDownload(ctx: Context) {
         apk(ctx).delete()

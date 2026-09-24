@@ -3,6 +3,7 @@ package ru.valov.raspisanie
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -51,11 +53,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -149,6 +154,30 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= 33) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
         Notifier.schedule(ctx)
+    }
+
+    var fresh by remember { mutableStateOf<Updater.Release?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        if (prefs.autoUpdate) fresh = Updater.weekly(ctx, prefs)
+    }
+    fresh?.let { r ->
+        AlertDialog(
+            onDismissRequest = { fresh = null },
+            title = { Text("Вышла версия " + r.version) },
+            text = { Text("Сейчас стоит " + Updater.installed(ctx) + ". Обновить?") },
+            confirmButton = {
+                TextButton({
+                    fresh = null
+                    scope.launch {
+                        val msg = runCatching { Updater.update(ctx) }
+                            .getOrElse { "Ошибка обновления: " + (it.message ?: "нет сети") }
+                        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Обновить") }
+            },
+            dismissButton = { TextButton({ fresh = null }) { Text("Позже") } },
+        )
     }
 
     // BackHandler живёт снаружи: у уезжающего экрана пары он бы ещё ловил вторую «назад».
