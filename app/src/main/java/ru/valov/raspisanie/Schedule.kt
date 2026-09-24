@@ -191,13 +191,14 @@ class Schedule(
         }
 
         // Сначала во временный файл: оборвётся запись - прежнее расписание останется целым.
-        private fun save(ctx: Context, json: JSONObject) {
+        internal fun save(ctx: Context, json: JSONObject) {
             val tmp = File(ctx.filesDir, "schedule.json.tmp")
             tmp.writeText(json.toString())
             if (!tmp.renameTo(file(ctx))) error("Не удалось сохранить расписание")
         }
 
-        private fun parse(root: JSONObject, shifts: Map<LocalDate, Int>): Schedule {
+        /** JSON формата ассетов -> расписание. [local] - свои переносы из настроек. */
+        internal fun parse(root: JSONObject, local: Map<LocalDate, Int>): Schedule {
             val arr = root.getJSONArray("lessons")
             val lessons = (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
@@ -219,7 +220,11 @@ class Schedule(
                 )
             }
             val meta = root.getJSONObject("meta")
-            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, shifts)
+            // переносы с сервера - основа, свои из настроек поверх: можно отметить себе и личный выходной
+            val server = root.optJSONObject("shifts")
+                ?.let { o -> o.keys().asSequence().associate { LocalDate.parse(it) to o.getInt(it) } }
+                ?: emptyMap()
+            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, server + local)
         }
     }
 }

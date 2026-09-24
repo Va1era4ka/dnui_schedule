@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -57,6 +58,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,8 +77,10 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -84,6 +89,7 @@ val DAYS = listOf("Понедельник", "Вторник", "Среда", "Ч�
 val DAYS_SHORT = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 val DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM", Locale("ru"))
 private val HEADER_FMT = DateTimeFormatter.ofPattern("EEE, d MMMM", Locale("ru"))
+private val SYNC_FMT = DateTimeFormatter.ofPattern("d.MM HH:mm")
 
 /**
  * Листалка дней и недель: страница SWIPE_MID - сегодняшняя.
@@ -110,6 +116,9 @@ private fun minutesUntil(from: java.time.LocalTime, to: java.time.LocalTime): Lo
     (Duration.between(from, to).seconds + 59) / 60
 
 class MainActivity : ComponentActivity() {
+    // Растёт на каждый выход приложения на экран - по нему сверяемся с сервером.
+    private var starts by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = Prefs(this)
@@ -117,10 +126,15 @@ class MainActivity : ComponentActivity() {
             var theme by remember { mutableStateOf(prefs.theme) }
             var ready by remember { mutableStateOf(prefs.source != null) }
             AppTheme(theme) {
-                if (ready) App(theme) { theme = it; prefs.theme = it }
+                if (ready) App(theme, starts) { theme = it; prefs.theme = it }
                 else SourceScreen(onDone = { ready = true })
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        starts += 1
     }
 
     override fun onResume() {
@@ -130,7 +144,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App(theme: Int, onTheme: (Int) -> Unit) {
+fun App(theme: Int, starts: Int, onTheme: (Int) -> Unit) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     var klass by remember { mutableStateOf(prefs.klass) }
@@ -139,6 +153,36 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
     // у своего xlsx классов нет - плашку показываем только у встроенного
     val badge = remember(klass, settingsRev) { if (prefs.source == "bundled") "Класс $klass" else null }
     var choosing by remember { mutableStateOf(false) }   // смена источника из настроек
+    val scope = rememberCoroutineScope()
+
+    // Сервер: сверяемся при каждом открытии. Не вышло - работаем по последнему скачанному
+    // и тихо пишем об этом строкой на «Сегодня», без диалогов.
+    var syncError by remember { mutableStateOf<String?>(null) }
+    var syncing by remember { mutableStateOf(false) }
+    var syncedAt by remember { mutableLongStateOf(prefs.syncedAt) }
+    val sync: () -> Unit = sync@{
+        if (syncing || prefs.source != "server") return@sync
+        syncing = true
+        scope.launch {
+            val r = runCatching { Sync.refresh(ctx) }
+            syncing = false
+            syncedAt = prefs.syncedAt
+            syncError = r.exceptionOrNull()?.let(Sync::message)
+            if (r.getOrNull() == true) {
+                settingsRev += 1
+                Notifier.schedule(ctx)
+            }
+        }
+    }
+    LaunchedEffect(starts) { if (starts > 0) sync() }
+    val syncStatus = if (prefs.source != "server") null else {
+        val at = Instant.ofEpochMilli(syncedAt).atZone(ZoneId.systemDefault()).format(SYNC_FMT)
+        when {
+            syncing -> "Обновляю…"
+            syncError != null -> syncError + " · данные от " + at
+            else -> "Обновлено " + at
+        }
+    }
     var tab by remember { mutableStateOf(0) }
     var picked by remember { mutableStateOf<Pair<Lesson, LocalDate>?>(null) }
     var notesRev by remember { mutableStateOf(0) }   // чтобы заметки перерисовались после правки
@@ -164,7 +208,6 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
     }
 
     var fresh by remember { mutableStateOf<Updater.Release?>(null) }
-    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         if (prefs.autoUpdate) fresh = Updater.weekly(ctx, prefs)
     }
@@ -193,6 +236,8 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
             onDone = {
                 choosing = false
                 klass = prefs.klass
+                syncError = null
+                syncedAt = prefs.syncedAt
                 settingsRev += 1
                 Notifier.schedule(ctx)
             },
@@ -243,7 +288,10 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
                     ) { current ->
                         tabState.SaveableStateProvider(current) {
                             when (current) {
-                                0 -> TodayScreen(schedule, badge, now, prefs, notesRev, { tab = 2 }) { l, d ->
+                                0 -> TodayScreen(
+                                    schedule, badge, syncStatus.takeIf { syncError != null }, sync,
+                                    now, prefs, notesRev, { tab = 2 },
+                                ) { l, d ->
                                     picked = l to d
                                 }
                                 1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
@@ -251,6 +299,8 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
                                     prefs, klass, theme,
                                     onKlass = { Schedule.useBundled(ctx, it); klass = it },
                                     onSource = { choosing = true },
+                                    syncStatus = syncStatus,
+                                    onSync = sync,
                                     onTheme = onTheme,
                                     onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
                                 )
@@ -299,6 +349,8 @@ private enum class Tile { PAST, NOW, NEXT, LATER }
 private fun TodayScreen(
     schedule: Schedule,
     badge: String?,
+    syncProblem: String?,
+    onRetry: () -> Unit,
     now: LocalDateTime,
     prefs: Prefs,
     notesRev: Int,
@@ -308,7 +360,7 @@ private fun TodayScreen(
     val pager = rememberPagerState(SWIPE_MID) { SWIPE_PAGES }
     HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
         DayScreen(
-            schedule, badge, now, now.toLocalDate().plusDays((page - SWIPE_MID).toLong()),
+            schedule, badge, syncProblem, onRetry, now, now.toLocalDate().plusDays((page - SWIPE_MID).toLong()),
             prefs, notesRev, page == pager.settledPage, onSettings, onPick,
         )
     }
@@ -318,6 +370,8 @@ private fun TodayScreen(
 private fun DayScreen(
     schedule: Schedule,
     badge: String?,
+    syncProblem: String?,
+    onRetry: () -> Unit,
     now: LocalDateTime,
     date: LocalDate,
     prefs: Prefs,
@@ -349,6 +403,16 @@ private fun DayScreen(
                             "Неделя " + schedule.weekOf(date),
                             cs.tertiaryContainer, cs.onTertiaryContainer,
                         )
+                    }
+                    if (syncProblem != null) {
+                        Row(
+                            Modifier.padding(top = 10.dp).clip(RoundedCornerShape(8.dp)).clickable(onClick = onRetry),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Default.Refresh, "Повторить", Modifier.size(14.dp), tint = cs.onSurfaceVariant)
+                            Spacer(Modifier.width(6.dp))
+                            Text(syncProblem, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        }
                     }
                 }
                 Box(

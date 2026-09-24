@@ -13,7 +13,8 @@ class Prefs(private val ctx: Context) {
         set(v) = sp.edit().putInt("klass", v).apply()
 
     /**
-     * Откуда расписание: "bundled" - встроенное (класс в [klass]), "file" - свой xlsx.
+     * Откуда расписание: "bundled" - встроенное (класс в [klass]), "file" - свой xlsx,
+     * "server" - группа [group] на [server].
      * null - ещё не выбрано, показываем онбординг. Кто обновился с версии без выбора
      * источника, уже пользовался встроенным - онбординг им не нужен.
      */
@@ -22,6 +23,28 @@ class Prefs(private val ctx: Context) {
             .getPackageInfo(ctx.packageName, 0)
             .let { if (it.firstInstallTime != it.lastUpdateTime) "bundled" else null }
         set(v) = sp.edit().putString("source", v).apply()
+
+    var server: String
+        get() = sp.getString("server", null) ?: Sync.DEFAULT_SERVER
+        set(v) = sp.edit().putString("server", v).apply()
+
+    var group: String?
+        get() = sp.getString("group", null)
+        set(v) = sp.edit().putString("group", v).apply()
+
+    var groupTitle: String?
+        get() = sp.getString("groupTitle", null)
+        set(v) = sp.edit().putString("groupTitle", v).apply()
+
+    /** ETag скачанного расписания - сервер ответит 304, если оно не менялось. */
+    var etag: String?
+        get() = sp.getString("etag", null)
+        set(v) = sp.edit().putString("etag", v).apply()
+
+    /** Когда сервер последний раз ответил, мс. */
+    var syncedAt: Long
+        get() = sp.getLong("syncedAt", 0)
+        set(v) = sp.edit().putLong("syncedAt", v).apply()
 
     /** Оформление: 0 - системная тема, 1 - светлая, 2 - тёмная. */
     var theme: Int

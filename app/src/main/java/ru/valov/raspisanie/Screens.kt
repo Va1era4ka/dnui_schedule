@@ -37,9 +37,12 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
@@ -54,6 +57,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +71,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -592,6 +598,8 @@ fun SettingsScreen(
     theme: Int,
     onKlass: (Int) -> Unit,
     onSource: () -> Unit,
+    syncStatus: String?,
+    onSync: () -> Unit,
     onTheme: (Int) -> Unit,
     onChanged: () -> Unit,
 ) {
@@ -631,8 +639,31 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
         SectionLabel("Расписание")
         SettingsBlock {
-            val bundled = prefs.source == "bundled"
-            ActionRow("Источник", if (bundled) "Встроенное" else "Свой файл", onSource)
+            val source = prefs.source
+            val bundled = source == "bundled"
+            ActionRow(
+                "Источник",
+                when (source) { "bundled" -> "Встроенное"; "server" -> "Сервер"; else -> "Свой файл" },
+                onSource,
+            )
+            if (source == "server") {
+                InfoDivider()
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(prefs.groupTitle ?: prefs.group ?: "", style = MaterialTheme.typography.bodyMedium)
+                        val host = prefs.server.takeIf { it != Sync.DEFAULT_SERVER }?.removePrefix("https://")
+                        Text(
+                            listOfNotNull(syncStatus, host).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onSync) { Text("Обновить") }
+                }
+            }
             if (bundled) {
                 InfoDivider()
                 Row(
@@ -898,6 +929,32 @@ fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
     // Даты начала семестра в выгрузке нет. У всех групп DNUI она общая - её и предлагаем.
     var week1 by remember { mutableStateOf(WEEK1_MONDAY) }
 
+    var server by remember { mutableStateOf(Sync.DEFAULT_SERVER) }
+    var groups by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
+    var groupsError by remember { mutableStateOf<String?>(null) }
+    var target by remember { mutableStateOf("") }        // код группы или ссылка
+    var otherServer by remember { mutableStateOf(false) }
+    var serverInput by remember { mutableStateOf("") }
+    var connecting by remember { mutableStateOf(false) }
+    var connectError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(server) {
+        groups = null
+        groupsError = null
+        runCatching { Sync.groups(server) }
+            .onSuccess { groups = it }
+            .onFailure { groupsError = Sync.message(it) }
+    }
+    // Первая загрузка должна пройти: без неё показывать нечего, поэтому ошибку - прямо в карточке.
+    val connect: (String, String) -> Unit = { s, code ->
+        connecting = true
+        connectError = null
+        scope.launch {
+            val r = runCatching { Sync.connect(ctx, s, code) }
+            connecting = false
+            r.onSuccess { onDone() }.onFailure { connectError = Sync.message(it) }
+        }
+    }
+
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         busy = true
@@ -1013,6 +1070,88 @@ fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
                         Modifier.fillMaxWidth(),
                     ) { Text("Готово") }
                     TextButton({ parsed = null; pick.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth()) { Text("Другой файл") }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        SectionLabel("С сервера")
+        SettingsBlock {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Расписание и выходные от старосты. Обновляется при каждом открытии, " +
+                        "без интернета работает по последнему скачанному.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                val list = groups
+                val listError = groupsError
+                when {
+                    listError != null -> Text(listError, style = MaterialTheme.typography.bodySmall, color = cs.error)
+                    list == null -> Text(
+                        "Загружаю список групп…",
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    )
+                    list.isEmpty() -> Text(
+                        "Открытых групп нет — подключайтесь по коду",
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    )
+                }
+                list?.forEach { (code, title) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cs.surfaceContainerHighest)
+                            .clickable(enabled = !connecting) { connect(server, code) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = cs.onSurfaceVariant)
+                    }
+                }
+
+                val go = {
+                    val t = Sync.parseTarget(target, server)
+                    if (t == null) connectError = "Это не похоже ни на код группы, ни на ссылку"
+                    else connect(t.first, t.second)
+                }
+                OutlinedTextField(
+                    target, { target = it; connectError = null },
+                    Modifier.fillMaxWidth(),
+                    label = { Text("Код группы или ссылка") },
+                    singleLine = true,
+                    // коды вида gtu47z: автозамена и заглавные только мешают
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        imeAction = ImeAction.Go,
+                    ),
+                    keyboardActions = KeyboardActions(onGo = { go() }),
+                )
+                connectError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error) }
+                Button(go, Modifier.fillMaxWidth(), enabled = !connecting && target.isNotBlank()) {
+                    Text(if (connecting) "Подключаюсь…" else "Подключиться")
+                }
+
+                if (!otherServer) {
+                    TextButton({ otherServer = true }, Modifier.fillMaxWidth()) { Text("Другой сервер") }
+                } else {
+                    OutlinedTextField(
+                        serverInput, { serverInput = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("Адрес сервера") },
+                        placeholder = { Text("https://…") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
+                    )
+                    TextButton(
+                        {
+                            val s = Sync.normalizeServer(serverInput)
+                            if (s == null) groupsError = "Нужен адрес вида https://сервер" else server = s
+                        },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("Показать группы этого сервера") }
                 }
             }
         }
