@@ -1,6 +1,7 @@
 # Сервер расписания
 
-Cloudflare Worker + D1. Пока только публичное чтение — контракт в [docs/api.md](../docs/api.md).
+Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admin/*`) — через Cloudflare Access.
+Контракт — [docs/api.md](../docs/api.md).
 Бесплатного тарифа Cloudflare хватает с запасом.
 
 ## Разработка
@@ -43,6 +44,24 @@ curl https://dnui-schedule.hsryata.com/v1/groups
 
 Потом — только `npx wrangler deploy` после правок кода и
 `npx wrangler d1 migrations apply dnui-schedule --remote` после новых миграций.
+
+## Вход в админку (Cloudflare Access)
+
+Один раз в панели Cloudflare, бесплатно до 50 пользователей:
+
+1. **Zero Trust** → выбрать имя команды (оно станет `<команда>.cloudflareaccess.com`) и план Free.
+2. **Settings → Authentication → Login methods**: включён **One-time PIN** — код на почту.
+3. **Access → Applications → Add → Self-hosted**:
+   - домен `dnui-schedule.hsryata.com`, пути `v1/admin` и `admin` (второй — для будущего фронта);
+   - Session duration — 1 month;
+   - Policy: Allow, Include → Emails — адреса редакторов.
+4. В `wrangler.toml` вписать `ACCESS_TEAM` (имя команды) и `ACCESS_AUD` (Application Audience
+   Tag из обзора приложения), затем `npx wrangler deploy`.
+5. Проверка: открыть в браузере `https://dnui-schedule.hsryata.com/v1/admin/me` → письмо с кодом
+   → в ответе свой email.
+
+Пока `ACCESS_TEAM`/`ACCESS_AUD` пустые, запись закрыта для всех. Добавить редактора — дописать
+email в Policy, код менять не нужно.
 
 ## Свой сервер
 

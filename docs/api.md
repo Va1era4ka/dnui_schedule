@@ -62,7 +62,30 @@ HTML-страница группы: название, крупный код и �
 `https://сервер/g/…` сразу в приложении. Работает только для домена, прописанного в манифесте
 приложения при сборке, — у своего сервера без своей сборки APK не нужен.
 
+## Запись: `/v1/admin/*`
+
+Только для редакторов: путь закрыт Cloudflare Access, сервер дополнительно проверяет подпись
+его токена (`Cf-Access-Jwt-Assertion`). Автор правки — email из токена. Запросы с чужим
+`Origin` отклоняются (`403`). Ответ на любую правку — `{"rev": N}` с новой ревизией группы.
+
+| Запрос | Тело | Что делает |
+|---|---|---|
+| `GET /v1/admin/me` | — | `{"email": …}` — кто вошёл |
+| `GET /v1/admin/groups` | — | все группы, скрытые тоже: `code, title, listed, rev, updated_at, updated_by` |
+| `POST /v1/admin/groups` | `{title, week1_monday, slots?, lessons?, listed?}` | новая группа, `201 {"code", "rev"}` |
+| `PATCH /v1/admin/groups/{code}` | `{title?, week1_monday?, listed?}` | название, начало семестра, показ в списке |
+| `DELETE /v1/admin/groups/{code}` | — | группа вместе с переносами и домашкой |
+| `PUT /v1/admin/groups/{code}/lessons` | `{rev, slots, lessons}` | пары целиком; `rev` не текущий — `409 {"rev": текущий}` |
+| `PUT /v1/admin/groups/{code}/homework/{lesson}/{date}` | `{text, until?}` | домашка на паре `{lesson}` (id, URL-кодированный) в дату `{date}` |
+| `DELETE /v1/admin/groups/{code}/homework/{lesson}/{date}` | — | убрать домашку |
+| `PUT /v1/admin/groups/{code}/shifts/{date}` | `{day}` | 0 — выходной, 1–7 — чьи пары идут |
+| `DELETE /v1/admin/groups/{code}/shifts/{date}` | — | убрать перенос |
+
+Неверные данные — `400 {"error":"bad_request","message":"…"}`, текст можно показывать как есть.
+Домашка к паре, которой в группе нет, не принимается; домашка к паре, которую потом убрали
+из расписания, остаётся в базе, но приложение её не покажет.
+
 ## Ошибки
 
 `404 {"error":"not_found"}` — нет такой группы или пути, `405 {"error":"method_not_allowed"}` —
-не GET. CORS открыт (`Access-Control-Allow-Origin: *`): данные публичные.
+не GET вне `/v1/admin`, `401 {"error":"unauthorized"}` — запись без входа. CORS открыт (`Access-Control-Allow-Origin: *`): данные публичные.

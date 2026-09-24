@@ -1,8 +1,10 @@
+import { admin } from "./admin";
+import { CORS, json } from "./http";
 import { assetLinks, invitePage } from "./invite";
 
 /**
- * Публичное API расписания: только чтение, без входа. Контракт - docs/api.md.
- * Запись (админка за Cloudflare Access) появится отдельными путями /v1/admin/*.
+ * API расписания. Контракт - docs/api.md. Чтение публичное и без входа,
+ * запись - /v1/admin/* за Cloudflare Access (admin.ts).
  */
 
 interface GroupRow {
@@ -14,44 +16,28 @@ interface GroupRow {
   rev: number;
 }
 
-// Данные публичные - пусть их читает и чужой веб-клиент. ETag отдаём наружу для If-None-Match.
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "if-none-match",
-  "access-control-expose-headers": "etag",
-};
-
-function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      // no-cache = «переспроси»: кэш Cloudflare и телефона не отдаст устаревшее, а 304 почти бесплатен
-      "cache-control": "no-cache",
-      ...CORS,
-      ...headers,
-    },
-  });
-}
+const pub = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+  json(body, status, { ...CORS, ...headers });
 
 export default {
   async fetch(req, env): Promise<Response> {
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    if (req.method !== "GET") return json({ error: "method_not_allowed" }, 405);
-
     const path = new URL(req.url).pathname;
+    if (path.startsWith("/v1/admin/")) return admin(req, env, path);
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    if (req.method !== "GET") return pub({ error: "method_not_allowed" }, 405);
+
     if (path === "/v1/groups") {
       const { results } = await env.DB
         .prepare("SELECT code, title FROM groups WHERE listed = 1 ORDER BY title")
         .all();
-      return json({ groups: results });
+      return pub({ groups: results });
     }
     const m = path.match(/^\/v1\/groups\/([a-z0-9]{1,32})$/);
     if (m) return group(req, env, m[1]);
     const inv = path.match(/^\/g\/([a-z0-9]{1,32})\/?$/i);
     if (inv) return invitePage(req, env, inv[1].toLowerCase());
     if (path === "/.well-known/assetlinks.json") return assetLinks(env);
-    return json({ error: "not_found" }, 404);
+    return pub({ error: "not_found" }, 404);
   },
 } satisfies ExportedHandler<Env>;
 
@@ -65,14 +51,14 @@ async function group(req: Request, env: Env, code: string): Promise<Response> {
     ).bind(code),
   ]);
   const row = g.results[0] as GroupRow | undefined;
-  if (!row) return json({ error: "not_found" }, 404);
+  if (!row) return pub({ error: "not_found" }, 404);
 
   const etag = `"${row.rev}"`;
   if (req.headers.get("if-none-match") === etag) {
     return new Response(null, { status: 304, headers: { etag, "cache-control": "no-cache", ...CORS } });
   }
   const lessons: { weeks: [number, number] }[] = JSON.parse(row.lessons_json);
-  return json(
+  return pub(
     {
       code: row.code,
       title: row.title,
