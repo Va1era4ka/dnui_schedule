@@ -115,7 +115,11 @@ class MainActivity : ComponentActivity() {
         val prefs = Prefs(this)
         setContent {
             var theme by remember { mutableStateOf(prefs.theme) }
-            AppTheme(theme) { App(theme) { theme = it; prefs.theme = it } }
+            var ready by remember { mutableStateOf(prefs.source != null) }
+            AppTheme(theme) {
+                if (ready) App(theme) { theme = it; prefs.theme = it }
+                else SourceScreen(onDone = { ready = true })
+            }
         }
     }
 
@@ -131,7 +135,10 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
     val prefs = remember { Prefs(ctx) }
     var klass by remember { mutableStateOf(prefs.klass) }
     var settingsRev by remember { mutableStateOf(0) }   // переносы правятся в настройках
-    val schedule = remember(klass, settingsRev) { Schedule.load(ctx, klass) }
+    val schedule = remember(klass, settingsRev) { Schedule.load(ctx) }
+    // у своего xlsx классов нет - плашку показываем только у встроенного
+    val badge = remember(klass, settingsRev) { if (prefs.source == "bundled") "Класс $klass" else null }
+    var choosing by remember { mutableStateOf(false) }   // смена источника из настроек
     var tab by remember { mutableStateOf(0) }
     var picked by remember { mutableStateOf<Pair<Lesson, LocalDate>?>(null) }
     var notesRev by remember { mutableStateOf(0) }   // чтобы заметки перерисовались после правки
@@ -180,6 +187,20 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
         )
     }
 
+    if (choosing) {
+        BackHandler { choosing = false }
+        SourceScreen(
+            onDone = {
+                choosing = false
+                klass = prefs.klass
+                settingsRev += 1
+                Notifier.schedule(ctx)
+            },
+            onBack = { choosing = false },
+        )
+        return
+    }
+
     // BackHandler живёт снаружи: у уезжающего экрана пары он бы ещё ловил вторую «назад».
     if (picked != null) BackHandler { picked = null }
     // Пара въезжает справа поверх списка и так же уходит обратно.
@@ -222,13 +243,14 @@ fun App(theme: Int, onTheme: (Int) -> Unit) {
                     ) { current ->
                         tabState.SaveableStateProvider(current) {
                             when (current) {
-                                0 -> TodayScreen(schedule, klass, now, prefs, notesRev, { tab = 2 }) { l, d ->
+                                0 -> TodayScreen(schedule, badge, now, prefs, notesRev, { tab = 2 }) { l, d ->
                                     picked = l to d
                                 }
                                 1 -> WeekScreen(schedule, now) { l, d -> picked = l to d }
                                 else -> SettingsScreen(
                                     prefs, klass, theme,
-                                    onKlass = { klass = it; prefs.klass = it },
+                                    onKlass = { Schedule.useBundled(ctx, it); klass = it },
+                                    onSource = { choosing = true },
                                     onTheme = onTheme,
                                     onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
                                 )
@@ -276,7 +298,7 @@ private enum class Tile { PAST, NOW, NEXT, LATER }
 @Composable
 private fun TodayScreen(
     schedule: Schedule,
-    klass: Int,
+    badge: String?,
     now: LocalDateTime,
     prefs: Prefs,
     notesRev: Int,
@@ -286,7 +308,7 @@ private fun TodayScreen(
     val pager = rememberPagerState(SWIPE_MID) { SWIPE_PAGES }
     HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
         DayScreen(
-            schedule, klass, now, now.toLocalDate().plusDays((page - SWIPE_MID).toLong()),
+            schedule, badge, now, now.toLocalDate().plusDays((page - SWIPE_MID).toLong()),
             prefs, notesRev, page == pager.settledPage, onSettings, onPick,
         )
     }
@@ -295,7 +317,7 @@ private fun TodayScreen(
 @Composable
 private fun DayScreen(
     schedule: Schedule,
-    klass: Int,
+    badge: String?,
     now: LocalDateTime,
     date: LocalDate,
     prefs: Prefs,
@@ -322,7 +344,7 @@ private fun DayScreen(
                     Text(dayTitle(date, today), style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Chip("Класс " + klass, cs.primaryContainer, cs.onPrimaryContainer)
+                        if (badge != null) Chip(badge, cs.primaryContainer, cs.onPrimaryContainer)
                         Chip(
                             "Неделя " + schedule.weekOf(date),
                             cs.tertiaryContainer, cs.onTertiaryContainer,

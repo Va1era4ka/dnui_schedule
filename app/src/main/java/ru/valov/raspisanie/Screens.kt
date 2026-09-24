@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,7 +70,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -586,6 +591,7 @@ fun SettingsScreen(
     klass: Int,
     theme: Int,
     onKlass: (Int) -> Unit,
+    onSource: () -> Unit,
     onTheme: (Int) -> Unit,
     onChanged: () -> Unit,
 ) {
@@ -625,16 +631,21 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
         SectionLabel("Расписание")
         SettingsBlock {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Класс", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                Segmented(
-                    listOf("1", "2"), klass - 1,
-                    { onKlass(it + 1); onChanged() },
-                    Modifier.width(130.dp),
-                )
+            val bundled = prefs.source == "bundled"
+            ActionRow("Источник", if (bundled) "Встроенное" else "Свой файл", onSource)
+            if (bundled) {
+                InfoDivider()
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Класс", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Segmented(
+                        listOf("1", "2"), klass - 1,
+                        { onKlass(it + 1); onChanged() },
+                        Modifier.width(130.dp),
+                    )
+                }
             }
         }
 
@@ -866,5 +877,109 @@ private fun ActionRow(title: String, value: String, onClick: () -> Unit) {
     ) {
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+// ---------- Источник расписания ----------
+
+/**
+ * Онбординг и он же - смена источника из настроек: встроенное расписание или свой xlsx.
+ * Выбранное сразу пишется в schedule.json, дальше приложение про источник не знает.
+ */
+@Composable
+fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
+    val cs = MaterialTheme.colorScheme
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var klass by remember { mutableStateOf(Prefs(ctx).klass) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        error = null
+        scope.launch {
+            // файл может лежать на облачном диске - читаем не на главном потоке
+            val r = runCatching {
+                withContext(Dispatchers.IO) {
+                    ctx.contentResolver.openInputStream(uri)!!.use { Xlsx.parse(it, WEEK1_MONDAY) }
+                }
+            }
+            busy = false
+            r.onFailure { error = (it as? ScheduleFormatError)?.message ?: "Не получилось открыть файл" }
+            r.onSuccess { json ->
+                // Даты начала семестра в выгрузке нет. У всех групп DNUI она общая - её и предлагаем.
+                pickDate(ctx, "Понедельник первой недели", WEEK1_MONDAY) { d ->
+                    json.getJSONObject("meta").put("week1_monday", d.with(DayOfWeek.MONDAY).toString())
+                    Schedule.useFile(ctx, json)
+                    onDone()
+                }
+            }
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(cs.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp)
+    ) {
+        if (onBack != null) {
+            IconButton(onBack, Modifier.padding(top = 8.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
+            }
+        } else {
+            Spacer(Modifier.height(40.dp))
+        }
+        Text("Откуда брать расписание", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Потом можно поменять в настройках. Заметки к парам остаются на телефоне.",
+            style = MaterialTheme.typography.bodySmall,
+            color = cs.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(24.dp))
+        SectionLabel("Встроенное")
+        SettingsBlock {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "留软件25401 (俄财大) — уже в приложении, интернет не нужен",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Класс", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Segmented(listOf("1", "2"), klass - 1, { klass = it + 1 }, Modifier.width(130.dp))
+                }
+                Button(
+                    { Schedule.useBundled(ctx, klass); onDone() },
+                    Modifier.fillMaxWidth(),
+                    enabled = !busy,
+                ) { Text("Выбрать") }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        SectionLabel("Свой файл")
+        SettingsBlock {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "Выгрузка расписания DNUI в xlsx: лист 课表, пары по строкам, дни по столбцам",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error) }
+                // ponytail: "*/*", а не MIME xlsx - мессенджеры сохраняют файлы с каким попало типом,
+                // и нужный оказался бы неактивным. Не-xlsx парсер отобьёт понятной ошибкой.
+                OutlinedButton(
+                    { pick.launch(arrayOf("*/*")) },
+                    Modifier.fillMaxWidth(),
+                    enabled = !busy,
+                ) { Text(if (busy) "Читаю файл…" else "Выбрать файл") }
+            }
+        }
     }
 }

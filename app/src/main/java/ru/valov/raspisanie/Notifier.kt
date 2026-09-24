@@ -142,7 +142,8 @@ object Notifier {
     /** Ставит будильник на ближайшее событие. Вызывать после любой правки настроек. */
     fun schedule(ctx: Context) {
         val prefs = Prefs(ctx)
-        val s = Schedule.load(ctx, prefs.klass)
+        if (prefs.source == null) return   // онбординг не пройден - напоминать не о чем
+        val s = Schedule.load(ctx)
         val e = nextEvent(
             s, LocalDateTime.now(), prefs.digestOn, prefs.digestAt, prefs.nextUpOn, prefs.leadMin
         ) ?: return
@@ -165,7 +166,7 @@ object Notifier {
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val prefs = Prefs(ctx)
-        val s = Schedule.load(ctx, prefs.klass)
+        val s = Schedule.load(ctx)
         // now минус минута: событие, ради которого нас разбудили, ещё "в будущем".
         val now = LocalDateTime.now()
         val e = nextEvent(

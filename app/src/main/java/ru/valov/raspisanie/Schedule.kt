@@ -1,6 +1,8 @@
 package ru.valov.raspisanie
 
 import android.content.Context
+import org.json.JSONObject
+import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -163,10 +165,39 @@ class Schedule(
         }
 
     companion object {
-        fun load(ctx: Context, klass: Int): Schedule {
-            // ponytail: xlsx разбирается при каждой загрузке - это миллисекунды на килобайтный файл.
-            // Кэш появится вместе с выбором источника расписания.
-            val root = ctx.assets.open("schedule.$klass.xlsx").use { Xlsx.parse(it, WEEK1_MONDAY) }
+        /** Активное расписание - один файл, откуда бы оно ни пришло: ассеты, свой xlsx, сервер. */
+        private fun file(ctx: Context) = File(ctx.filesDir, "schedule.json")
+
+        fun load(ctx: Context): Schedule {
+            val prefs = Prefs(ctx)
+            val f = file(ctx)
+            // Встроенное пересобираем после обновления APK: с ним могли приехать новые xlsx.
+            val updated = ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime
+            if (!f.exists() || prefs.source == "bundled" && f.lastModified() < updated) {
+                useBundled(ctx, prefs.klass)
+            }
+            return parse(JSONObject(f.readText()), prefs.shifts)
+        }
+
+        fun useBundled(ctx: Context, klass: Int) {
+            save(ctx, ctx.assets.open("schedule.$klass.xlsx").use { Xlsx.parse(it, WEEK1_MONDAY) })
+            Prefs(ctx).apply { this.klass = klass; source = "bundled" }
+        }
+
+        /** Свой xlsx, уже разобранный [Xlsx.parse]. Прежнее расписание он заменяет целиком. */
+        fun useFile(ctx: Context, json: JSONObject) {
+            save(ctx, json)
+            Prefs(ctx).source = "file"
+        }
+
+        // Сначала во временный файл: оборвётся запись - прежнее расписание останется целым.
+        private fun save(ctx: Context, json: JSONObject) {
+            val tmp = File(ctx.filesDir, "schedule.json.tmp")
+            tmp.writeText(json.toString())
+            if (!tmp.renameTo(file(ctx))) error("Не удалось сохранить расписание")
+        }
+
+        private fun parse(root: JSONObject, shifts: Map<LocalDate, Int>): Schedule {
             val arr = root.getJSONArray("lessons")
             val lessons = (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
@@ -188,9 +219,7 @@ class Schedule(
                 )
             }
             val meta = root.getJSONObject("meta")
-            return Schedule(
-                LocalDate.parse(meta.getString("week1_monday")), lessons, Prefs(ctx).shifts
-            )
+            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, shifts)
         }
     }
 }

@@ -5,12 +5,23 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /** ponytail: SharedPreferences. Room понадобится, когда заметки обрастут полями. */
-class Prefs(ctx: Context) {
+class Prefs(private val ctx: Context) {
     private val sp = ctx.getSharedPreferences("raspisanie", Context.MODE_PRIVATE)
 
     var klass: Int
         get() = sp.getInt("klass", 1)
         set(v) = sp.edit().putInt("klass", v).apply()
+
+    /**
+     * Откуда расписание: "bundled" - встроенное (класс в [klass]), "file" - свой xlsx.
+     * null - ещё не выбрано, показываем онбординг. Кто обновился с версии без выбора
+     * источника, уже пользовался встроенным - онбординг им не нужен.
+     */
+    var source: String?
+        get() = sp.getString("source", null) ?: ctx.packageManager
+            .getPackageInfo(ctx.packageName, 0)
+            .let { if (it.firstInstallTime != it.lastUpdateTime) "bundled" else null }
+        set(v) = sp.edit().putString("source", v).apply()
 
     /** Оформление: 0 - системная тема, 1 - светлая, 2 - тёмная. */
     var theme: Int
