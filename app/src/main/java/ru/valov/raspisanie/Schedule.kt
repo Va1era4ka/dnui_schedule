@@ -1,7 +1,6 @@
 package ru.valov.raspisanie
 
 import android.content.Context
-import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -165,9 +164,9 @@ class Schedule(
 
     companion object {
         fun load(ctx: Context, klass: Int): Schedule {
-            val root = JSONObject(
-                ctx.assets.open("schedule.$klass.json").bufferedReader().use { it.readText() }
-            )
+            // ponytail: xlsx разбирается при каждой загрузке - это миллисекунды на килобайтный файл.
+            // Кэш появится вместе с выбором источника расписания.
+            val root = ctx.assets.open("schedule.$klass.xlsx").use { Xlsx.parse(it, WEEK1_MONDAY) }
             val arr = root.getJSONArray("lessons")
             val lessons = (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)

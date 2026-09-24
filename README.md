@@ -24,14 +24,11 @@ APK — в `app/build/outputs/apk/release/`. Локально подписыва
 
 ## Расписание
 
-Лежит в `app/src/main/assets/schedule.1.json` и `schedule.2.json` (по классу),
-генерируется из файлов `*课表.xlsx`:
+Лежит в `app/src/main/assets/schedule.1.xlsx` и `schedule.2.xlsx` (по классу) — это
+выгрузки DNUI как есть, приложение разбирает их само ([Xlsx.kt](app/src/main/java/ru/valov/raspisanie/Xlsx.kt)).
 
-```bash
-python parse.py
-```
-
-Поменялось расписание — заменил xlsx, перезапустил скрипт, пересобрал.
+Поменялось расписание — открой новый xlsx в Excel, **удали лист 学生名单** (там ФИО и номера
+студенческих), сохрани под тем же именем в ассеты, пересобери. Лишний лист тест не пропустит.
 
 ## Остальное
 
