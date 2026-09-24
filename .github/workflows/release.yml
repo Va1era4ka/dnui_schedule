@@ -4,6 +4,9 @@ on:
   push:
     branches: [master]
     tags: ['v*']
+    # Правки только сервера APK не меняют - не плодим сборки master-N в R2.
+    # На теги фильтр путей не действует: релиз собирается всегда.
+    paths-ignore: ['server/**', '.github/workflows/server.yml']
   workflow_dispatch:
 
 permissions:

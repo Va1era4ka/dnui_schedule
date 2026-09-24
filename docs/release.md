@@ -13,6 +13,15 @@
 `dnui-schedule-latest.apk`. Ссылка на последнюю:
 <https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest.apk>
 
+Пуши, которые трогают только `server/`, APK не собирают.
+
+## Сервер в CI
+
+[`.github/workflows/server.yml`](../.github/workflows/server.yml) на каждый пуш и PR, которые
+трогают `server/` или `fixtures/`, гоняет проверку типов и тесты Worker и админки (в том числе
+сверку парсера xlsx с эталонами). Пуш в `master` с зелёными тестами дальше применяет миграции D1
+и деплоит на `dnui-schedule.hsryata.com` — руками `wrangler deploy` больше не нужен.
+
 ## Обновление из приложения
 
 Настройки → «Обновить». Версия берётся из последнего релиза на GitHub, APK качается
@@ -41,6 +50,12 @@ Settings → Secrets and variables → Actions:
 | `R2_ACCESS_KEY_ID` | из R2 API token |
 | `R2_SECRET_ACCESS_KEY` | из R2 API token |
 | `R2_BUCKET` | имя бакета |
+| `CLOUDFLARE_API_TOKEN` | деплой сервера, см. ниже |
+
+`CLOUDFLARE_API_TOKEN`: Cloudflare → My Profile → API Tokens → Create Token → шаблон
+**Edit Cloudflare Workers**; Account Resources — свой аккаунт, Zone Resources — `hsryata.com`;
+добавить строку **Account · D1 · Edit**. ID аккаунта берётся из `R2_ACCOUNT_ID` — сервер
+в том же аккаунте, что и R2.
 
 **`release.jks` терять нельзя** — подписанные другим ключом APK не встанут поверх
 установленного, придётся сносить приложение вместе с заметками. Файл в `.gitignore`,
