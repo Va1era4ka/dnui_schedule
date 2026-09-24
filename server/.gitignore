@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+# генерируется `wrangler types` из wrangler.toml
+worker-configuration.d.ts
+# коды групп из scripts/seed.mjs - одноразовый файл
+seed.sql
+# локальные секреты wrangler dev - в git не кладём
+.dev.vars*

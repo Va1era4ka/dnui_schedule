@@ -1,0 +1,14 @@
+# Публичное API расписания. Контракт - docs/api.md, первичная настройка - server/README.md.
+name = "dnui-schedule"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# Только свой домен: workers.dev пошёл бы в обход Cloudflare Access, когда появится админка.
+workers_dev = false
+routes = [{ pattern = "dnui-schedule.hsryata.com", custom_domain = true }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dnui-schedule"
+database_id = "ВСТАВЬ_ИЗ_wrangler_d1_create"
+migrations_dir = "migrations"
