@@ -11,6 +11,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.net.URLDecoder
 
 /** Ошибка синхронизации. Текст показывается пользователю как есть. */
 class SyncError(msg: String) : Exception(msg)
@@ -51,6 +52,24 @@ object Sync {
         val m = LINK.matchEntire(u.rawPath ?: "") ?: return null
         val base = normalizeServer("https://" + u.rawAuthority + m.groupValues[1]) ?: return null
         return base to m.groupValues[2].lowercase()
+    }
+
+    /**
+     * Ссылка, которой открыли приложение: https://сервер/g/код (App Links нашего домена)
+     * или raspisanie://connect?server=…&group=… - для любого сервера.
+     */
+    fun parseLink(link: String): Pair<String, String>? {
+        val u = runCatching { URI(link) }.getOrNull() ?: return null
+        if (u.scheme == "raspisanie") {
+            if (u.host != "connect") return null
+            val q = (u.rawQuery ?: "").split('&')
+                .mapNotNull { it.split('=', limit = 2).takeIf { kv -> kv.size == 2 } }
+                .associate { (k, v) -> k to URLDecoder.decode(v, "UTF-8") }
+            val server = normalizeServer(q["server"] ?: DEFAULT_SERVER) ?: return null
+            // в group ждём код, а не ссылку на третий сервер
+            return parseTarget(q["group"] ?: return null, server)?.takeIf { it.first == server }
+        }
+        return if (u.scheme == "https") parseTarget(link, DEFAULT_SERVER) else null
     }
 
     /** Группы, открытые для списка: код -> название. */

@@ -12,3 +12,10 @@ binding = "DB"
 database_name = "dnui-schedule"
 database_id = "d9c61e6d-05e8-4b49-9d74-24d9d82e390c"
 migrations_dir = "migrations"
+
+[vars]
+# App Links: Android открывает ссылки /g/… сразу в приложении, если его подпись есть здесь.
+# Релизный ключ (release.jks) и отладочный с машины разработчика - чтобы проверять debug-сборки.
+APP_PACKAGE = "ru.valov.raspisanie"
+APP_CERTS = "97:57:16:FF:45:E1:AD:A5:23:C6:3E:F6:54:C7:FB:4D:7F:EA:D4:9A:EC:11:E6:B9:98:B9:6B:33:40:97:17:A0,CC:EA:3D:11:A9:0E:5A:D3:63:EA:18:6A:77:7C:56:6A:33:C7:FC:B5:0B:01:9A:00:3B:B2:C4:3D:BE:EE:4E:E9"
+APK_URL = "https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest.apk"

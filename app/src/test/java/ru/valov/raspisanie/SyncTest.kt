@@ -7,6 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.time.LocalDate
 
 class SyncTest {
@@ -48,5 +49,38 @@ class SyncTest {
         val s = Schedule.parse(root, mapOf(LocalDate.parse("2026-10-02") to 5))
         assertTrue(s.isHoliday(LocalDate.parse("2026-10-01")))
         assertFalse(s.isHoliday(LocalDate.parse("2026-10-02")))
+    }
+
+    @Test fun `ссылки-приглашения - App Links нашего домена и raspisanie для любого сервера`() {
+        assertEquals(def to "gtu47z", Sync.parseLink("https://dnui-schedule.hsryata.com/g/gtu47z"))
+        assertEquals(
+            "https://my.host" to "abc",
+            Sync.parseLink("raspisanie://connect?server=https%3A%2F%2Fmy.host&group=abc"),
+        )
+        assertEquals(def to "abc", Sync.parseLink("raspisanie://connect?group=abc"))
+        assertNull(Sync.parseLink("raspisanie://connect?server=http%3A%2F%2Fevil&group=abc"))
+        assertNull(Sync.parseLink("raspisanie://connect?group=https%3A%2F%2Fother%2Fg%2Fabc"))
+        assertNull(Sync.parseLink("raspisanie://other?group=abc"))
+    }
+
+    @Test fun `домашка видна на следующей паре по предмету, с пометкой до - вплоть до даты`() {
+        val root = JSONObject(File("../fixtures/schedule.1.json").readText()).put(
+            "homework",
+            org.json.JSONArray(
+                """[{"lesson":"1-4-概率论与数理统计Ⅱ-1","date":"2026-09-21","text":"задачи 1-5","until":null},
+                    {"lesson":"4-3-金融大数据分析-1","date":"2026-09-24","text":"глава 2","until":"2026-10-08"}]"""
+            ),
+        )
+        val s = Schedule.parse(root, emptyMap())
+        fun at(id: String) = s.lessons.first { it.id == id }
+        val tv = at("4-4-概率论与数理统计Ⅱ-1")          // теорвер по четвергам
+        assertEquals("задачи 1-5", s.homeworkFor(tv, LocalDate.parse("2026-09-24"))?.second)
+        // следующая пара по теорверу уже в понедельник - без пометки «до» дальше не тянется
+        assertNull(s.homeworkFor(at("1-4-概率论与数理统计Ⅱ-1"), LocalDate.parse("2026-09-28")))
+
+        val bd = at("4-3-金融大数据分析-1")
+        assertEquals("глава 2", s.homeworkAt(bd, LocalDate.parse("2026-09-24"))?.text)
+        assertEquals("глава 2", s.homeworkFor(bd, LocalDate.parse("2026-10-08"))?.second)
+        assertNull(s.homeworkFor(bd, LocalDate.parse("2026-10-15")))
     }
 }

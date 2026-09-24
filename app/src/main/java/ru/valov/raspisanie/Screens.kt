@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -475,22 +476,27 @@ fun LessonScreen(
             ) { Text("Сохранить", fontSize = 13.5.sp) }
         }
 
+        // Домашка с сервера - только чтение, над своей заметкой и другим цветом.
+        val due = remember(schedule, l.id, date) { schedule.homeworkFor(l, date) }
+        if (due != null) {
+            LabeledText(
+                "Домашка к этой паре · задали " + due.first.format(DATE_FMT), due.second,
+                cs.secondaryContainer, cs.onSecondaryContainer,
+            )
+        }
+        val given = remember(schedule, l.id, date) { schedule.homeworkAt(l, date) }
+        if (given != null) {
+            LabeledText(
+                "Задали на этой паре" + (given.until?.let { " · до " + it.format(DATE_FMT) } ?: ""),
+                given.text, cs.secondaryContainer, cs.onSecondaryContainer,
+            )
+        }
         val last = remember(l.id, date, notesRev) { prefs.lastNote(schedule, l, date) }
         if (last != null) {
-            Spacer(Modifier.height(18.dp))
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                SectionLabel("С прошлой пары · " + last.first.format(DATE_FMT))
-                Text(
-                    last.second,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onTertiaryContainer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cs.tertiaryContainer)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                )
-            }
+            LabeledText(
+                "Заметка с прошлой пары · " + last.first.format(DATE_FMT), last.second,
+                cs.tertiaryContainer, cs.onTertiaryContainer,
+            )
         }
 
         Spacer(Modifier.height(18.dp))
@@ -575,6 +581,24 @@ private fun InfoRow(icon: ImageVector, label: String, value: String) {
             Text(label, fontSize = 12.sp, color = cs.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.bodyLarge, fontSize = 15.sp)
         }
+    }
+}
+
+@Composable
+private fun LabeledText(label: String, text: String, bg: Color, fg: Color) {
+    Spacer(Modifier.height(18.dp))
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        SectionLabel(label)
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = fg,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(bg)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        )
     }
 }
 
@@ -913,6 +937,45 @@ private fun ActionRow(title: String, value: String, onClick: () -> Unit) {
 
 // ---------- Источник расписания ----------
 
+/** Открыли ссылку-приглашение: подтверждение и первая загрузка расписания группы. */
+@Composable
+fun InviteDialog(server: String, code: String, onDismiss: () -> Unit, onConnected: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Подключиться к группе?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Код группы: $code")
+                if (server != Sync.DEFAULT_SERVER) Text("Сервер: " + server.removePrefix("https://"))
+                Text(
+                    "Расписание заменится расписанием группы. Личные заметки останутся на телефоне.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        runCatching { Sync.connect(ctx, server, code) }
+                            .onSuccess { onConnected() }
+                            .onFailure { error = Sync.message(it); busy = false }
+                    }
+                },
+                enabled = !busy,
+            ) { Text(if (busy) "Подключаюсь…" else "Подключиться") }
+        },
+        dismissButton = { TextButton(onDismiss, enabled = !busy) { Text("Отмена") } },
+    )
+}
+
 /**
  * Онбординг и он же - смена источника из настроек: встроенное расписание или свой xlsx.
  * Выбранное сразу пишется в schedule.json, дальше приложение про источник не знает.
@@ -1079,8 +1142,8 @@ fun SourceScreen(onDone: () -> Unit, onBack: (() -> Unit)? = null) {
         SettingsBlock {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Расписание и выходные от старосты. Обновляется при каждом открытии, " +
-                        "без интернета работает по последнему скачанному.",
+                    "Общее расписание группы: пары, переносы и домашка. Обновляется при каждом " +
+                        "открытии, без интернета работает по последнему скачанному.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 val list = groups

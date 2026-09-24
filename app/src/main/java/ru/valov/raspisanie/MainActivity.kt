@@ -1,6 +1,7 @@
 package ru.valov.raspisanie
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -58,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,18 +120,36 @@ private fun minutesUntil(from: java.time.LocalTime, to: java.time.LocalTime): Lo
 class MainActivity : ComponentActivity() {
     // Растёт на каждый выход приложения на экран - по нему сверяемся с сервером.
     private var starts by mutableIntStateOf(0)
+    // Ссылка-приглашение на группу: сервер и код, ждут подтверждения в диалоге.
+    private var invite by mutableStateOf<Pair<String, String>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = Prefs(this)
+        // при повороте экрана intent тот же - второй раз не спрашиваем
+        if (savedInstanceState == null) invite = intent.dataString?.let(Sync::parseLink)
         setContent {
             var theme by remember { mutableStateOf(prefs.theme) }
             var ready by remember { mutableStateOf(prefs.source != null) }
+            var generation by remember { mutableIntStateOf(0) }   // новое расписание - App с нуля
             AppTheme(theme) {
-                if (ready) App(theme, starts) { theme = it; prefs.theme = it }
+                if (ready) key(generation) { App(theme, starts) { theme = it; prefs.theme = it } }
                 else SourceScreen(onDone = { ready = true })
+                invite?.let { (server, code) ->
+                    InviteDialog(server, code, onDismiss = { invite = null }) {
+                        invite = null
+                        ready = true
+                        generation += 1
+                        Notifier.schedule(this)
+                    }
+                }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.dataString?.let(Sync::parseLink)?.let { invite = it }
     }
 
     override fun onStart() {
@@ -478,12 +498,13 @@ private fun DayScreen(
                                 ?.let { "с прошлой пары: " + it.second } ?: ""
                         }
                     }
+                    val homework = remember(schedule, l.id, date) { schedule.homeworkFor(l, date)?.second ?: "" }
                     when (state) {
                         Tile.NOW, Tile.NEXT -> HeroTile(l, prev, now, state == Tile.NOW) {
                             onPick(l, date)
                         }
                         Tile.PAST -> PastTile(l) { onPick(l, date) }
-                        Tile.LATER -> LaterTile(schedule, l, note) { onPick(l, date) }
+                        Tile.LATER -> LaterTile(schedule, l, homework, note) { onPick(l, date) }
                     }
                 }
             }
@@ -606,7 +627,21 @@ private fun PastTile(l: Lesson, onClick: () -> Unit) {
 }
 
 @Composable
-private fun LaterTile(schedule: Schedule, l: Lesson, note: String, onClick: () -> Unit) {
+private fun TileNote(text: String, bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color) {
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text, style = MaterialTheme.typography.bodySmall,
+        color = fg,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        maxLines = 2, overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun LaterTile(schedule: Schedule, l: Lesson, homework: String, note: String, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val dot = subjectColors(schedule.subjects.indexOf(l.nameRu)).second
     Row(
@@ -636,18 +671,9 @@ private fun LaterTile(schedule: Schedule, l: Lesson, note: String, onClick: () -
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (note.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    note, style = MaterialTheme.typography.bodySmall,
-                    color = cs.onTertiaryContainer,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(cs.tertiaryContainer)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-            }
+            // домашка общая, с сервера, заметка своя - разными цветами, чтобы не путать
+            if (homework.isNotEmpty()) TileNote("ДЗ: $homework", cs.secondaryContainer, cs.onSecondaryContainer)
+            if (note.isNotEmpty()) TileNote(note, cs.tertiaryContainer, cs.onTertiaryContainer)
         }
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight, null,

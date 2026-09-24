@@ -95,21 +95,25 @@ object Notifier {
     }
 
     /**
-     * Строка в свёрнутом уведомлении. У дайджеста там счётчик заметок,
+     * Строка в свёрнутом уведомлении. У дайджеста там счётчики домашки и заметок,
      * иначе они видны только если развернуть.
      */
     fun summary(e: Event, s: Schedule, prefs: Prefs, body: String): String {
         if (e !is Digest) return body.lineSequence().first()
         val today = s.on(e.forDate)
         val notes = today.count { noteLine(s, prefs, it, e.forDate) != null }
-        val first = "Первая пара в " + today.first().start
-        return if (notes == 0) first else "$first · заметок: $notes"
+        val homework = today.count { s.homeworkFor(it, e.forDate) != null }
+        return listOfNotNull(
+            "Первая пара в " + today.first().start,
+            "домашка: $homework".takeIf { homework > 0 },
+            "заметок: $notes".takeIf { notes > 0 },
+        ).joinToString(" · ")
     }
 
     private fun line(s: Schedule, prefs: Prefs, l: Lesson, date: LocalDate): String {
         val head = l.start.toString() + " " + l.nameRu + " - " + l.roomRu
-        val note = noteLine(s, prefs, l, date) ?: return head
-        return head + NL + note
+        val homework = s.homeworkFor(l, date)?.let { "Домашка: " + it.second }
+        return listOfNotNull(head, homework, noteLine(s, prefs, l, date)).joinToString(NL)
     }
 
     /** Своя заметка на эту дату, а нет - что записали на прошлой такой паре. */

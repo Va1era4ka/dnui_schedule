@@ -1,3 +1,5 @@
+import { assetLinks, invitePage } from "./invite";
+
 /**
  * Публичное API расписания: только чтение, без входа. Контракт - docs/api.md.
  * Запись (админка за Cloudflare Access) появится отдельными путями /v1/admin/*.
@@ -46,6 +48,9 @@ export default {
     }
     const m = path.match(/^\/v1\/groups\/([a-z0-9]{1,32})$/);
     if (m) return group(req, env, m[1]);
+    const inv = path.match(/^\/g\/([a-z0-9]{1,32})\/?$/i);
+    if (inv) return invitePage(req, env, inv[1].toLowerCase());
+    if (path === "/.well-known/assetlinks.json") return assetLinks(env);
     return json({ error: "not_found" }, 404);
   },
 } satisfies ExportedHandler<Env>;

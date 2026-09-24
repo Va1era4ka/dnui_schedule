@@ -76,6 +76,9 @@ fun shiftRanges(shifts: Map<LocalDate, Int>): List<ShiftRange> {
     return out
 }
 
+/** Домашка с сервера: задали на паре в какую-то дату, [until] - докуда показывать на следующих. */
+data class Homework(val text: String, val until: LocalDate?)
+
 /** Насколько далеко смотрим по предмету назад и вперёд: семестр, дальше домашку не задают. */
 private const val HORIZON = 120
 
@@ -87,6 +90,8 @@ class Schedule(
     val lessons: List<Lesson>,
     /** Правки расписания: дата -> чьи пары идут. 1 = понедельник, 0 = выходной. */
     private val shifts: Map<LocalDate, Int> = emptyMap(),
+    /** (id пары, дата, где задали) -> домашка. Бывает только у расписания с сервера. */
+    private val homework: Map<Pair<String, LocalDate>, Homework> = emptyMap(),
 ) {
 
     /** Предметы в стабильном порядке - по нему выбирается цвет предмета. */
@@ -158,6 +163,31 @@ class Schedule(
                 .map { it to d }.asSequence()
         }
 
+    /**
+     * Запись с прошлых пар по тому же предмету - заметка или домашка: дата пары и текст.
+     * Без пометки «до» видна только на следующей паре, с пометкой - вплоть до той даты.
+     */
+    fun lastEntry(
+        l: Lesson,
+        date: LocalDate,
+        entry: (id: String, date: LocalDate) -> Pair<String, LocalDate?>?,
+    ): Pair<LocalDate, String>? {
+        earlier(l, date).forEachIndexed { i, (p, d) ->
+            val (text, until) = entry(p.id, d) ?: return@forEachIndexed
+            val visible = if (until != null) !date.isAfter(until) else i == 0
+            if (text.isNotEmpty() && visible) return d to text
+        }
+        return null
+    }
+
+    /** Домашка к этой паре - заданная на прошлых по предмету. */
+    fun homeworkFor(l: Lesson, date: LocalDate): Pair<LocalDate, String>? =
+        if (homework.isEmpty()) null
+        else lastEntry(l, date) { id, d -> homework[id to d]?.let { it.text to it.until } }
+
+    /** Что задали на самой этой паре - пропустившим пару тоже надо знать. */
+    fun homeworkAt(l: Lesson, date: LocalDate): Homework? = homework[l.id to date]
+
     /** Пара, идущая прямо сейчас (для «до конца пары»). */
     fun current(now: LocalDateTime): Lesson? =
         on(now.toLocalDate()).firstOrNull {
@@ -224,7 +254,15 @@ class Schedule(
             val server = root.optJSONObject("shifts")
                 ?.let { o -> o.keys().asSequence().associate { LocalDate.parse(it) to o.getInt(it) } }
                 ?: emptyMap()
-            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, server + local)
+            val homework = root.optJSONArray("homework")?.let { a ->
+                (0 until a.length()).associate { i ->
+                    val o = a.getJSONObject(i)
+                    val until = if (o.isNull("until")) null else LocalDate.parse(o.getString("until"))
+                    (o.getString("lesson") to LocalDate.parse(o.getString("date"))) to
+                        Homework(o.getString("text"), until)
+                }
+            } ?: emptyMap()
+            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, server + local, homework)
         }
     }
 }

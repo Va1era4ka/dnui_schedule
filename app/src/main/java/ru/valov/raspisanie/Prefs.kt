@@ -105,16 +105,6 @@ class Prefs(private val ctx: Context) {
             .apply()
 }
 
-/**
- * Заметка с прошлой пары по тому же предмету: её дата и текст.
- * Обычная видна только на следующей паре, помеченная «показывать до» - вплоть до той даты.
- */
-fun Prefs.lastNote(schedule: Schedule, l: Lesson, date: LocalDate): Pair<LocalDate, String>? {
-    schedule.earlier(l, date).forEachIndexed { i, (p, d) ->
-        val text = note(p.id, d)
-        val until = noteUntil(p.id, d)
-        val visible = if (until != null) !date.isAfter(until) else i == 0
-        if (text.isNotEmpty() && visible) return d to text
-    }
-    return null
-}
+/** Заметка с прошлой пары по тому же предмету: её дата и текст. Правила - [Schedule.lastEntry]. */
+fun Prefs.lastNote(schedule: Schedule, l: Lesson, date: LocalDate): Pair<LocalDate, String>? =
+    schedule.lastEntry(l, date) { id, d -> note(id, d) to noteUntil(id, d) }
