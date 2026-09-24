@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef } from "react";
 
 /** Переход без перезагрузки: маршруты рисует App по location.pathname. */
 export function navigate(to: string) {
@@ -60,11 +60,36 @@ export function Field({ label, hint, children }: { label: string; hint?: ReactNo
   );
 }
 
+/** Модальное окно на встроенном <dialog>: фон, Esc и фокус браузер делает сам. */
+export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current!;
+    if (open && !d.open) d.showModal();
+    if (!open && d.open) d.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      className="m-auto max-h-[90dvh] w-[min(100%-2rem,34rem)] overflow-auto rounded-[28px] bg-bg text-fg backdrop:bg-black/50"
+    >
+      {open && (
+        <div className="space-y-4 p-6">
+          <h2 className="text-xl font-semibold">{title}</h2>
+          {children}
+        </div>
+      )}
+    </dialog>
+  );
+}
+
 export function ErrorText({ children }: { children?: ReactNode }) {
   return children ? <p className="text-sm text-error">{children}</p> : null;
 }
 
 export const DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+export const DAYS_FULL = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
 /** "2026-08-31" -> "31 августа" */

@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { api, type GroupData, type GroupInfo } from "./api";
 import { Checkbox, mondayHint } from "./Groups";
+import { Homework } from "./Homework";
+import { Shifts } from "./Shifts";
 import { Button, Card, DAYS, ErrorText, Field, inputClass, Link, mondayOf, navigate } from "./ui";
+import { Week } from "./Week";
 import { diffLessons, type Lesson, parseXlsx, type Parsed } from "./xlsx";
+
+const TABS = [
+  ["", "Неделя"],
+  ["homework", "Домашка"],
+  ["shifts", "Выходные"],
+  ["settings", "Настройки"],
+] as const;
 
 /** Выбор xlsx: разбирается сразу в браузере, на сервер уходят уже готовые пары. */
 export function XlsxInput({ onParsed }: { onParsed: (p: Parsed | null) => void }) {
@@ -36,7 +46,7 @@ export function XlsxInput({ onParsed }: { onParsed: (p: Parsed | null) => void }
   );
 }
 
-export function Group({ code }: { code: string }) {
+export function Group({ code, tab }: { code: string; tab: string }) {
   const [data, setData] = useState<GroupData | null>(null);
   const [info, setInfo] = useState<GroupInfo | null>(null);
   const [error, setError] = useState("");
@@ -64,11 +74,29 @@ export function Group({ code }: { code: string }) {
           код <span className="font-mono">{code}</span> · ревизия {data.rev}
         </p>
       </div>
-      {/* key: после сохранения поля заново берутся с сервера */}
-      <Settings key={data.rev} data={data} info={info} onSaved={load} />
-      <Invite code={code} />
-      <Lessons data={data} onSaved={load} />
-      <Danger data={data} />
+      <nav className="flex gap-1 overflow-x-auto rounded-full bg-highest p-1">
+        {TABS.map(([t, name]) => (
+          <Link
+            key={t}
+            to={`/admin/g/${code}${t && "/" + t}`}
+            className={`flex-1 whitespace-nowrap rounded-full px-3 py-2 text-center text-sm ${tab === t ? "bg-primary font-semibold text-on-primary" : ""}`}
+          >
+            {name}
+          </Link>
+        ))}
+      </nav>
+      {tab === "" && <Week data={data} onSaved={load} />}
+      {tab === "homework" && <Homework data={data} onSaved={load} />}
+      {tab === "shifts" && <Shifts data={data} onSaved={load} />}
+      {tab === "settings" && (
+        <>
+          {/* key: после сохранения поля заново берутся с сервера */}
+          <Settings key={data.rev} data={data} info={info} onSaved={load} />
+          <Invite code={code} />
+          <Lessons data={data} onSaved={load} />
+          <Danger data={data} />
+        </>
+      )}
     </div>
   );
 }

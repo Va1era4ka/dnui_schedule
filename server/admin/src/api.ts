@@ -63,4 +63,12 @@ export const api = {
   remove: (code: string) => call<unknown>("DELETE", `/v1/admin/groups/${code}`),
   lessons: (code: string, rev: number, slots: Slot[], lessons: Lesson[]) =>
     call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/lessons`, { rev, slots, lessons }),
+  // id пары бывает с иероглифами и пробелами - в путь только закодированным
+  homework: (code: string, lesson: string, date: string, text: string, until: string | null) =>
+    call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/homework/${encodeURIComponent(lesson)}/${date}`, { text, until }),
+  dropHomework: (code: string, lesson: string, date: string) =>
+    call<{ rev: number }>("DELETE", `/v1/admin/groups/${code}/homework/${encodeURIComponent(lesson)}/${date}`),
+  shift: (code: string, date: string, day: number) =>
+    call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/shifts/${date}`, { day }),
+  dropShift: (code: string, date: string) => call<{ rev: number }>("DELETE", `/v1/admin/groups/${code}/shifts/${date}`),
 };

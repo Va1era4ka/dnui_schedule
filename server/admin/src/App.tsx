@@ -21,7 +21,7 @@ export function App() {
     api.me().then((r) => setEmail(r.email), () => {});
   }, []);
 
-  const group = path.match(/^\/admin\/g\/([a-z0-9]+)/)?.[1];
+  const [, group, tab = ""] = path.match(/^\/admin\/g\/([a-z0-9]+)(?:\/([a-z]+))?/) ?? [];
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16">
       <header className="flex items-baseline justify-between gap-4 py-5">
@@ -30,7 +30,7 @@ export function App() {
         </Link>
         <span className="truncate text-xs text-muted">{email}</span>
       </header>
-      {group ? <Group key={group} code={group} /> : path === "/admin/new" ? <NewGroup /> : <Groups />}
+      {group ? <Group key={group} code={group} tab={tab} /> : path === "/admin/new" ? <NewGroup /> : <Groups />}
     </div>
   );
 }
