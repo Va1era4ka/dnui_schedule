@@ -53,6 +53,26 @@ class SyncTest {
         assertEquals(setOf(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-02")), s.groupShifts.keys)
     }
 
+    @Test fun `правка на дату - отмена и замена только в свою дату`() {
+        val id = "4-3-金融大数据分析-1"
+        val repl = JSONObject(File("../fixtures/schedule.1.json").readText()).getJSONArray("lessons")
+            .let { a -> (0 until a.length()).map { a.getJSONObject(it) }.first { it.getString("id") == id } }
+            .put("name_ru", "Физкультура").put("room", "спортзал")
+        val root = JSONObject(File("../fixtures/schedule.1.json").readText()).put(
+            "changes",
+            JSONObject().put("2026-10-08", JSONObject().put(id, JSONObject.NULL))
+                .put("2026-10-15", JSONObject().put(id, repl).put("нет-такой", JSONObject.NULL)),
+        )
+        val s = Schedule.parse(root, emptyMap())
+        fun at(d: String) = s.on(LocalDate.parse(d)).firstOrNull { it.id == id }
+        assertNull(at("2026-10-08"))
+        assertEquals("Физкультура", at("2026-10-15")?.nameRu)
+        assertEquals("спортзал", at("2026-10-15")?.room)
+        assertEquals(4, at("2026-10-15")?.day)
+        // через неделю - снова по расписанию
+        assertEquals(s.lessons.first { it.id == id }, at("2026-10-22"))
+    }
+
     @Test fun `ссылки-приглашения - App Links нашего домена и raspisanie для любого сервера`() {
         assertEquals(def to "gtu47z", Sync.parseLink("https://dnui-schedule.hsryata.com/g/gtu47z"))
         assertEquals(

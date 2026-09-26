@@ -7,9 +7,10 @@ app/build/
 # путь к SDK, у каждой машины свой
 local.properties
 
-# IDE и python
+# IDE, python и локальные настройки Claude Code
 .idea/
 __pycache__/
+.claude/
 
 # разное
 # исходные выгрузки с листом 学生名单 (ФИО, номера студенческих) - не коммитим;

@@ -1,6 +1,7 @@
 /**
  * Какие пары идут в какую дату - та же логика, что Schedule.kt в приложении:
- * неделя считается от первого понедельника, перенос подменяет день недели, 0 - выходной.
+ * неделя считается от первого понедельника, перенос подменяет день недели, 0 - выходной,
+ * правка на дату отменяет или подменяет пару только в эту дату.
  * Даты - строки "ГГГГ-ММ-ДД", считаем в UTC, чтобы часовой пояс не сдвигал дни.
  */
 import type { GroupData } from "./api";
@@ -19,14 +20,29 @@ export function today(): string {
   return [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((x) => String(x).padStart(2, "0")).join("-");
 }
 
-type Sched = Pick<GroupData, "lessons" | "shifts" | "meta">;
+type Sched = Pick<GroupData, "lessons" | "shifts" | "meta" | "changes">;
 
-export function lessonsOn(g: Sched, iso: string): Lesson[] {
+/** Правка пары на дату: undefined - её нет, null - пара отменена, иначе - что идёт вместо. */
+export const changeOf = (g: Sched, iso: string, id: string) => {
+  const c = g.changes?.[iso];
+  return c && Object.hasOwn(c, id) ? c[id] : undefined;
+};
+
+/**
+ * Замена приходит с id исходной пары - к нему привязана домашка этой даты.
+ * [withCancelled] - вместе с отменёнными в эту дату: админке их надо показать, чтобы вернуть.
+ */
+export function lessonsOn(g: Sched, iso: string, withCancelled = false): Lesson[] {
   const day = g.shifts[iso] ?? weekday(iso);
   if (day === 0) return [];
   const w = weekOf(g.meta.week1_monday, iso);
   return g.lessons
     .filter((l) => l.day === day && w >= l.weeks[0] && w <= l.weeks[1])
+    .flatMap((l) => {
+      const c = changeOf(g, iso, l.id);
+      if (c === undefined) return [l];
+      return c ? [{ ...l, ...c }] : withCancelled ? [l] : [];
+    })
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 

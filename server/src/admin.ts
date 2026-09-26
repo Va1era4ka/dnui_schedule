@@ -1,6 +1,6 @@
 /**
  * Запись: /v1/admin/*, только через Cloudflare Access. Контракт - docs/api.md.
- * Любая правка группы, её переносов или домашки поднимает rev - приложения подтянут её
+ * Любая правка группы, её переносов, правок на дату или домашки поднимает rev - приложения подтянут её
  * при следующем открытии.
  */
 import { accessUser } from "./auth";
@@ -32,6 +32,22 @@ function time(v: unknown, name: string): string {
   return v as string;
 }
 
+/** Что пара из себя представляет в конкретный день - всё, кроме id, дня недели и недель. */
+function lessonFields(l: Record<string, unknown>, at: string) {
+  return {
+    name: str(l.name, `${at}.name`),
+    name_ru: str(l.name_ru, `${at}.name_ru`),
+    slot: int(l.slot, `${at}.slot`, 1, 20),
+    start: time(l.start, `${at}.start`),
+    end: time(l.end, `${at}.end`),
+    teacher: str(l.teacher, `${at}.teacher`, 200, 0),
+    room: str(l.room, `${at}.room`, 200, 0),
+    room_ru: str(l.room_ru, `${at}.room_ru`, 200, 0),
+    building: str(l.building, `${at}.building`, 200, 0),
+    building_ru: str(l.building_ru, `${at}.building_ru`, 200, 0),
+  };
+}
+
 /** Пары в формате ассетов приложения. Лишние поля отбрасываем, в базу - только известные. */
 function lessonsOf(v: unknown) {
   if (!Array.isArray(v) || v.length > 300) bad("lessons: массив до 300 пар");
@@ -45,21 +61,9 @@ function lessonsOf(v: unknown) {
     const id = str(l.id, `${at}.id`);
     if (ids.has(id)) bad(`${at}.id: «${id}» повторяется`);
     ids.add(id);
-    return {
-      id,
-      name: str(l.name, `${at}.name`),
-      name_ru: str(l.name_ru, `${at}.name_ru`),
-      weeks: [from, to],
-      day: int(l.day, `${at}.day`, 1, 7),
-      slot: int(l.slot, `${at}.slot`, 1, 20),
-      start: time(l.start, `${at}.start`),
-      end: time(l.end, `${at}.end`),
-      teacher: str(l.teacher, `${at}.teacher`, 200, 0),
-      room: str(l.room, `${at}.room`, 200, 0),
-      room_ru: str(l.room_ru, `${at}.room_ru`, 200, 0),
-      building: str(l.building, `${at}.building`, 200, 0),
-      building_ru: str(l.building_ru, `${at}.building_ru`, 200, 0),
-    };
+    const { name, name_ru, slot, ...rest } = lessonFields(l, at);
+    // порядок ключей - как в ассетах приложения
+    return { id, name, name_ru, weeks: [from, to], day: int(l.day, `${at}.day`, 1, 7), slot, ...rest };
   });
 }
 
@@ -211,6 +215,30 @@ async function route(req: Request, env: Env, path: string, user: string): Promis
          ON CONFLICT (group_code, lesson_id, date) DO UPDATE SET
            text = excluded.text, until = excluded.until, author = excluded.author, updated_at = excluded.updated_at`,
       ).bind(code, lesson, day, text, until, user),
+    );
+  }
+
+  const ch = rest.match(/^\/changes\/([^/]+)\/([^/]+)$/);
+  if (ch && (m === "PUT" || m === "DELETE")) {
+    const lesson = decodeURIComponent(ch[1]);
+    const day = date(decodeURIComponent(ch[2]), "дата");
+    if (m === "DELETE") {
+      return run(
+        code,
+        db.prepare("DELETE FROM changes WHERE group_code = ? AND lesson_id = ? AND date = ?").bind(code, lesson, day),
+      );
+    }
+    const ids = (JSON.parse(row.lessons_json) as { id: string }[]).map((l) => l.id);
+    if (!ids.includes(lesson)) bad(`в группе нет пары «${lesson}»`);
+    const b = await body(req);
+    if (!("lesson" in b)) bad("lesson: null - отменить, объект - что идёт вместо");
+    const repl = b.lesson === null ? null : JSON.stringify(lessonFields((b.lesson ?? {}) as Record<string, unknown>, "lesson"));
+    return run(
+      code,
+      db.prepare(
+        `INSERT INTO changes (group_code, lesson_id, date, lesson_json) VALUES (?, ?, ?, ?)
+         ON CONFLICT (group_code, date, lesson_id) DO UPDATE SET lesson_json = excluded.lesson_json`,
+      ).bind(code, lesson, day, repl),
     );
   }
 

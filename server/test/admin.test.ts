@@ -106,6 +106,25 @@ it("переносы: выходной и отмена", async () => {
   expect(pub.shifts).toEqual({});
 });
 
+it("правка пары в одну дату: отмена и замена", async () => {
+  const id = "4-3-金融大数据分析-1";
+  const url = `/v1/admin/groups/abc234/changes/${encodeURIComponent(id)}`;
+  const orig = fixture.lessons.find((l) => l.id === id)!;
+  const repl = { ...orig, name_ru: "Физкультура", room: "спортзал", id: "лишнее", weeks: [1, 2] };
+  expect((await call("PUT", `${url}/2026-10-08`, { body: { lesson: null } })).status).toBe(200);
+  expect((await call("PUT", `${url}/2026-10-15`, { body: { lesson: repl } })).status).toBe(200);
+  expect((await call("PUT", `${url}/2026-10-22`, { body: {} })).status).toBe(400);
+  expect((await call("PUT", `${url}/2026-10-22`, { body: { lesson: { name: "x" } } })).status).toBe(400);
+  expect((await call("PUT", "/v1/admin/groups/abc234/changes/nope/2026-10-08", { body: { lesson: null } })).status).toBe(400);
+  let pub: any = await (await exports.default.fetch(new Request(HOST + "/v1/groups/abc234"))).json();
+  const { id: _, weeks: __, day: ___, ...fields } = { ...orig, name_ru: "Физкультура", room: "спортзал" };
+  expect(pub.changes).toEqual({ "2026-10-08": { [id]: null }, "2026-10-15": { [id]: fields } });
+  await call("DELETE", `${url}/2026-10-08`);
+  await call("DELETE", `${url}/2026-10-15`);
+  pub = await (await exports.default.fetch(new Request(HOST + "/v1/groups/abc234"))).json();
+  expect(pub.changes).toEqual({});
+});
+
 it("пары меняются только с текущим rev - иначе 409, два редактора не затрут друг друга", async () => {
   const ok = await call("PUT", "/v1/admin/groups/abc234/lessons", {
     body: { rev: 5, slots: fixture.slots, lessons: fixture.lessons.slice(0, 3) },

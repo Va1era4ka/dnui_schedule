@@ -11,6 +11,9 @@ export interface GroupInfo {
 }
 
 /** Расписание группы - как его видит приложение (публичный GET). */
+/** Пара в конкретный день: всё, кроме id, дня недели и недель - они остаются от пары по расписанию. */
+export type DayLesson = Omit<Lesson, "id" | "day" | "weeks">;
+
 export interface GroupData {
   code: string;
   title: string;
@@ -20,6 +23,11 @@ export interface GroupData {
   lessons: Lesson[];
   shifts: Record<string, number>;
   homework: { lesson: string; date: string; text: string; until: string | null }[];
+  /**
+   * Правки на одну дату: дата -> id пары -> null (отменена) или что идёт вместо неё.
+   * Нет в ответе, закэшированном до появления правок (304).
+   */
+  changes?: Record<string, Record<string, DayLesson | null>>;
 }
 
 export class ApiError extends Error {
@@ -68,6 +76,11 @@ export const api = {
     call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/homework/${encodeURIComponent(lesson)}/${date}`, { text, until }),
   dropHomework: (code: string, lesson: string, date: string) =>
     call<{ rev: number }>("DELETE", `/v1/admin/groups/${code}/homework/${encodeURIComponent(lesson)}/${date}`),
+  /** null - отменить пару в эту дату, объект - что идёт вместо неё */
+  change: (code: string, lesson: string, date: string, repl: DayLesson | null) =>
+    call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/changes/${encodeURIComponent(lesson)}/${date}`, { lesson: repl }),
+  dropChange: (code: string, lesson: string, date: string) =>
+    call<{ rev: number }>("DELETE", `/v1/admin/groups/${code}/changes/${encodeURIComponent(lesson)}/${date}`),
   shift: (code: string, date: string, day: number) =>
     call<{ rev: number }>("PUT", `/v1/admin/groups/${code}/shifts/${date}`, { day }),
   dropShift: (code: string, date: string) => call<{ rev: number }>("DELETE", `/v1/admin/groups/${code}/shifts/${date}`),

@@ -58,13 +58,14 @@ async function adminPage(req: Request, env: Env): Promise<Response> {
 }
 
 async function group(req: Request, env: Env, code: string): Promise<Response> {
-  // Одним батчем - это одна транзакция: rev, переносы и домашка из одного состояния базы.
-  const [g, shifts, homework] = await env.DB.batch([
+  // Одним батчем - это одна транзакция: rev, переносы, домашка и правки на дату из одного состояния базы.
+  const [g, shifts, homework, changes] = await env.DB.batch([
     env.DB.prepare("SELECT * FROM groups WHERE code = ?").bind(code),
     env.DB.prepare("SELECT date, day FROM shifts WHERE group_code = ? ORDER BY date").bind(code),
     env.DB.prepare(
       "SELECT lesson_id AS lesson, date, text, until FROM homework WHERE group_code = ? ORDER BY date, lesson_id",
     ).bind(code),
+    env.DB.prepare("SELECT date, lesson_id, lesson_json FROM changes WHERE group_code = ? ORDER BY date, lesson_id").bind(code),
   ]);
   const row = g.results[0] as GroupRow | undefined;
   if (!row) return pub({ error: "not_found" }, 404);
@@ -90,6 +91,9 @@ async function group(req: Request, env: Env, code: string): Promise<Response> {
         (shifts.results as { date: string; day: number }[]).map((s) => [s.date, s.day]),
       ),
       homework: homework.results,
+      changes: (changes.results as { date: string; lesson_id: string; lesson_json: string | null }[]).reduce<
+        Record<string, Record<string, unknown>>
+      >((o, c) => (((o[c.date] ??= {})[c.lesson_id] = c.lesson_json && JSON.parse(c.lesson_json)), o), {}),
     },
     200,
     { etag },

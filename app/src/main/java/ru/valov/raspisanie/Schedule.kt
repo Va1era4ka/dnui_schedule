@@ -94,6 +94,11 @@ class Schedule(
     private val homework: Map<Pair<String, LocalDate>, Homework> = emptyMap(),
     /** Переносы с сервера - уже входят в [shifts], отдельно нужны настройкам: убрать их нельзя. */
     val groupShifts: Map<LocalDate, Int> = emptyMap(),
+    /**
+     * Правки на одну дату, только с сервера: (id пары, дата) -> null - отменена, иначе что идёт вместо.
+     * Замена несёт id исходной пары - по нему находятся домашка и заметки этой даты.
+     */
+    private val changes: Map<Pair<String, LocalDate>, Lesson?> = emptyMap(),
 ) {
 
     /** Предметы в стабильном порядке - по нему выбирается цвет предмета. */
@@ -111,7 +116,8 @@ class Schedule(
     fun mondayOf(week: Int): LocalDate = week1Monday.plusDays((week - 1) * 7L)
 
     /**
-     * Пары на дату. Перенос делает воскресенье понедельником, праздник - пустым днём.
+     * Пары на дату. Перенос делает воскресенье понедельником, праздник - пустым днём,
+     * правка на дату отменяет или подменяет пару только в эту дату.
      * ponytail: неделя берётся по самой дате; понадобится «пары за пятницу
      * пятой недели» - храни в переносе ещё и номер недели.
      */
@@ -121,6 +127,7 @@ class Schedule(
         val week = weekOf(date)
         return lessons
             .filter { it.day == day && week >= it.weekFrom && week <= it.weekTo }
+            .mapNotNull { (it.id to date).let { k -> if (k in changes) changes[k] else it } }
             .sortedBy { it.start }
     }
 
@@ -232,12 +239,11 @@ class Schedule(
         /** JSON формата ассетов -> расписание. [local] - свои переносы из настроек. */
         internal fun parse(root: JSONObject, local: Map<LocalDate, Int>): Schedule {
             val arr = root.getJSONArray("lessons")
-            val lessons = (0 until arr.length()).map { i ->
-                val o = arr.getJSONObject(i)
-                val weeks = o.getJSONArray("weeks")
+            // id, день и недели у замены на дату - от исходной пары, остальное - своё
+            fun lesson(o: JSONObject, id: String, day: Int, weekFrom: Int, weekTo: Int) =
                 Lesson(
-                    id = o.getString("id"),
-                    day = o.getInt("day"),
+                    id = id,
+                    day = day,
                     slot = o.getInt("slot"),
                     start = LocalTime.parse(o.getString("start")),
                     end = LocalTime.parse(o.getString("end")),
@@ -247,10 +253,15 @@ class Schedule(
                     room = o.getString("room"),
                     roomRu = o.getString("room_ru"),
                     building = o.getString("building"),
-                    weekFrom = weeks.getInt(0),
-                    weekTo = weeks.getInt(1),
+                    weekFrom = weekFrom,
+                    weekTo = weekTo,
                 )
+            val lessons = (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val weeks = o.getJSONArray("weeks")
+                lesson(o, o.getString("id"), o.getInt("day"), weeks.getInt(0), weeks.getInt(1))
             }
+            val byId = lessons.associateBy { it.id }
             val meta = root.getJSONObject("meta")
             // переносы с сервера - основа, свои из настроек поверх: можно отметить себе и личный выходной
             val server = root.optJSONObject("shifts")
@@ -264,7 +275,20 @@ class Schedule(
                         Homework(o.getString("text"), until)
                 }
             } ?: emptyMap()
-            return Schedule(LocalDate.parse(meta.getString("week1_monday")), lessons, server + local, homework, server)
+            val changes = root.optJSONObject("changes")?.let { byDate ->
+                byDate.keys().asSequence().flatMap { d ->
+                    val day = byDate.getJSONObject(d)
+                    // правка пары, которую потом убрали из расписания, - ни к чему не относится
+                    day.keys().asSequence().mapNotNull { id ->
+                        val base = byId[id] ?: return@mapNotNull null
+                        (id to LocalDate.parse(d)) to day.optJSONObject(id)
+                            ?.let { lesson(it, id, base.day, base.weekFrom, base.weekTo) }
+                    }
+                }.toMap()
+            } ?: emptyMap()
+            return Schedule(
+                LocalDate.parse(meta.getString("week1_monday")), lessons, server + local, homework, server, changes,
+            )
         }
     }
 }
