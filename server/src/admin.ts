@@ -45,6 +45,8 @@ function lessonFields(l: Record<string, unknown>, at: string) {
     room_ru: str(l.room_ru, `${at}.room_ru`, 200, 0),
     building: str(l.building, `${at}.building`, 200, 0),
     building_ru: str(l.building_ru, `${at}.building_ru`, 200, 0),
+    // необязательная - только с пометкой, у обычной поля нет: так пары совпадают с ассетами приложения
+    ...(l.optional === true && { optional: true }),
   };
 }
 
@@ -202,7 +204,12 @@ async function route(req: Request, env: Env, path: string, user: string): Promis
       );
     }
     const ids = (JSON.parse(row.lessons_json) as { id: string }[]).map((l) => l.id);
-    if (!ids.includes(lesson)) bad(`в группе нет пары «${lesson}»`);
+    // пара, добавленная на один день, живёт в changes - домашку к ней можно только в её дату
+    const added = await db
+      .prepare("SELECT 1 FROM changes WHERE group_code = ? AND lesson_id = ? AND date = ? AND lesson_json IS NOT NULL")
+      .bind(code, lesson, day)
+      .first();
+    if (!ids.includes(lesson) && !added) bad(`в группе нет пары «${lesson}»`);
     const b = await body(req);
     const text = str(b.text, "text", 2000);
     const until = b.until == null ? null : date(b.until, "until");
@@ -229,10 +236,14 @@ async function route(req: Request, env: Env, path: string, user: string): Promis
       );
     }
     const ids = (JSON.parse(row.lessons_json) as { id: string }[]).map((l) => l.id);
-    if (!ids.includes(lesson)) bad(`в группе нет пары «${lesson}»`);
     const b = await body(req);
     if (!("lesson" in b)) bad("lesson: null - отменить, объект - что идёт вместо");
-    const repl = b.lesson === null ? null : JSON.stringify(lessonFields((b.lesson ?? {}) as Record<string, unknown>, "lesson"));
+    const l = b.lesson as Record<string, unknown> | null;
+    // added - новая пара только на эту дату, под своим id; её не отменяют, а удаляют (DELETE)
+    const added = l?.added === true;
+    if (added && ids.includes(lesson)) bad(`пара «${lesson}» уже есть в расписании`);
+    if (!added && !ids.includes(lesson)) bad(`в группе нет пары «${lesson}»`);
+    const repl = l === null ? null : JSON.stringify({ ...lessonFields(l ?? {}, "lesson"), ...(added && { added }) });
     return run(
       code,
       db.prepare(

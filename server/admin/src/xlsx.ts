@@ -18,6 +18,8 @@ export interface Lesson {
   slot: number;
   start: string;
   end: string;
+  /** необязательная пара - только из админки, в выгрузке такого нет */
+  optional?: boolean;
 }
 export interface Slot {
   n: number;

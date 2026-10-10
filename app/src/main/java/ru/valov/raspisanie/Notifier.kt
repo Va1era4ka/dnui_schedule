@@ -112,7 +112,7 @@ object Notifier {
     }
 
     private fun line(s: Schedule, prefs: Prefs, l: Lesson, date: LocalDate): String {
-        val head = l.start.toString() + " " + l.nameRu + " - " + l.roomRu
+        val head = l.start.toString() + " " + l.nameRu + (if (l.optional) " (необязательная)" else "") + " - " + l.roomRu
         val homework = s.homeworkFor(l, date)?.let { "Домашка: " + it.second }
         return listOfNotNull(head, homework, noteLine(s, prefs, l, date)).joinToString(NL)
     }

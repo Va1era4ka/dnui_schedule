@@ -579,7 +579,7 @@ private fun HeroTile(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(7.dp))
-            Text(l.roomRu + " · " + l.teacher, fontSize = 13.sp, color = faded, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(l.where, fontSize = 13.sp, color = faded, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // к этой паре её и готовят - на крупной карточке домашку видно первой
             if (homework.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -682,7 +682,7 @@ private fun LaterTile(schedule: Schedule, l: Lesson, homework: String, note: Str
                 Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
                 Spacer(Modifier.width(7.dp))
                 Text(
-                    l.roomRu + " · " + l.teacher,
+                    l.where,
                     style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,

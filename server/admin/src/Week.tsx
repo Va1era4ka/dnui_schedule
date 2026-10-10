@@ -7,7 +7,7 @@ import type { Lesson, Slot } from "./xlsx";
 type Edit =
   | { kind: "lesson"; lesson: Lesson | null; day: number }
   | { kind: "hw"; lesson: Lesson; date: string }
-  | { kind: "day"; lesson: Lesson; date: string }
+  | { kind: "day"; lesson: Lesson | null; date: string }
   | null;
 
 const badge = "rounded-full px-2.5 py-0.5 text-xs";
@@ -18,10 +18,8 @@ export function Week({ data, onSaved }: { data: GroupData; onSaved: () => void }
   const [week, setWeek] = useState(Math.max(1, current));
   const [edit, setEdit] = useState<Edit>(null);
   const monday = mondayOfWeek(data.meta.week1_monday, week);
-  // сб и вс - только если туда что-то попало: пары, перенос или выходной
-  const dates = Array.from({ length: 7 }, (_, i) => addDays(monday, i)).filter(
-    (d) => weekday(d) <= 5 || d in data.shifts || lessonsOn(data, d).length > 0,
-  );
+  // сб и вс тоже: на них ставят пары
+  const dates = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
   const close = () => setEdit(null);
 
   return (
@@ -46,7 +44,8 @@ export function Week({ data, onSaved }: { data: GroupData; onSaved: () => void }
         <Day key={d} data={data} date={d} onEdit={setEdit} />
       ))}
       <p className="text-xs text-muted">
-        «Изменить пару» меняет её во всех неделях, где она идёт. «На этот день» и домашка - только эту дату.
+        «Изменить пару» меняет её во всех неделях, где она идёт. «На этот день», «только на этот день» и домашка -
+        только эту дату.
       </p>
 
       {edit?.kind === "hw" && <HomeworkEditor data={data} lesson={edit.lesson} date={edit.date} onClose={close} onSaved={onSaved} />}
@@ -77,8 +76,9 @@ function Day({ data, date, onEdit }: { data: GroupData; date: string; onEdit: (e
         const hw = data.homework.find((h) => h.lesson === l.id && h.date === date);
         const change = changeOf(data, date, l.id);
         const off = change === null;
-        // правка на все недели и на день - всегда от исходной пары, а не от её замены
-        const base = data.lessons.find((x) => x.id === l.id)!;
+        // правка на все недели и на день - всегда от исходной пары, а не от её замены;
+        // у добавленной на эту дату исходной нет
+        const base = data.lessons.find((x) => x.id === l.id);
         return (
           <div key={l.id} className={`space-y-2 rounded-2xl bg-lowest p-3 ${off ? "opacity-60" : ""}`}>
             <div className="flex gap-3">
@@ -87,15 +87,21 @@ function Day({ data, date, onEdit }: { data: GroupData; date: string; onEdit: (e
               </span>
               <div className="min-w-0 flex-1">
                 <p className={`font-medium ${off ? "line-through" : ""}`}>{l.name_ru}</p>
-                {change !== undefined && (
-                  <span className={`${badge} bg-tertiary-container text-on-tertiary-container`}>
-                    {off
-                      ? "отменена в этот день"
-                      : `замена в этот день${base.name_ru !== l.name_ru ? ` · вместо «${base.name_ru}»` : ""}`}
-                  </span>
-                )}
+                <div className="flex flex-wrap gap-1">
+                  {change !== undefined && (
+                    <span className={`${badge} bg-tertiary-container text-on-tertiary-container`}>
+                      {!base
+                        ? "только в этот день"
+                        : off
+                          ? "отменена в этот день"
+                          : `замена в этот день${base.name_ru !== l.name_ru ? ` · вместо «${base.name_ru}»` : ""}`}
+                    </span>
+                  )}
+                  {l.optional && <span className={`${badge} bg-highest`}>необязательная</span>}
+                </div>
                 <p className="text-sm text-muted">
-                  {l.room_ru} · {l.teacher} · недели {l.weeks[0]}–{l.weeks[1]}
+                  {l.room_ru} · {l.teacher}
+                  {base && ` · недели ${l.weeks[0]}–${l.weeks[1]}`}
                 </p>
               </div>
             </div>
@@ -113,21 +119,26 @@ function Day({ data, date, onEdit }: { data: GroupData; date: string; onEdit: (e
               )}
               <button
                 className={off ? "font-semibold text-primary" : "text-muted"}
-                onClick={() => onEdit({ kind: "day", lesson: base, date })}
+                onClick={() => onEdit({ kind: "day", lesson: base ?? l, date })}
               >
-                {off ? "Вернуть или заменить" : "На этот день…"}
+                {off ? "Вернуть или заменить" : base ? "На этот день…" : "Изменить или удалить"}
               </button>
-              <button className="text-muted" onClick={() => onEdit({ kind: "lesson", lesson: base, day: base.day })}>
-                Изменить пару
-              </button>
+              {base && (
+                <button className="text-muted" onClick={() => onEdit({ kind: "lesson", lesson: base, day: base.day })}>
+                  Изменить пару
+                </button>
+              )}
             </div>
           </div>
         );
       })}
       {shift !== 0 && (
-        <button className="text-sm font-semibold text-primary" onClick={() => onEdit({ kind: "lesson", lesson: null, day: shift ?? wd })}>
-          + Пара по дням «{DAYS_FULL[(shift ?? wd) - 1]}»
-        </button>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold text-primary">
+          <button onClick={() => onEdit({ kind: "day", lesson: null, date })}>+ Пара только на этот день</button>
+          <button onClick={() => onEdit({ kind: "lesson", lesson: null, day: shift ?? wd })}>
+            + Пара по дням «{DAYS_FULL[(shift ?? wd) - 1]}»
+          </button>
+        </div>
       )}
     </section>
   );
@@ -213,8 +224,8 @@ export function HomeworkEditor({ data, lesson, date, onClose, onSaved }: {
   );
 }
 
-/** Поля формы -> пара как её хранит сервер, или текст ошибки. [orig] - какой пара была до правки. */
-function tidy(l: Lesson, orig: Lesson | null): Lesson | string {
+/** Поля формы -> пара как её хранит сервер, или текст ошибки. */
+function tidy(l: Lesson): Lesson | string {
   const name_ru = l.name_ru.trim();
   if (!name_ru) return "Нужно название";
   if (l.start >= l.end) return "Пара должна кончаться позже, чем начинается";
@@ -228,7 +239,8 @@ function tidy(l: Lesson, orig: Lesson | null): Lesson | string {
     room,
     room_ru: l.room_ru.trim() || room,
     building,
-    building_ru: orig?.building === building ? orig.building_ru : building,
+    // корпус тот же, что у исходной или подставленной пары, - и русское название его
+    building_ru: l.building === building ? l.building_ru : building,
   };
 }
 
@@ -283,6 +295,10 @@ function LessonFields({ data, l, set, nameHint }: {
           <input type="time" className={inputClass} value={l.end} onChange={(e) => set({ end: e.target.value })} />
         </Field>
       </div>
+      <label className="flex items-center gap-3 text-sm">
+        <input type="checkbox" className="size-5 accent-primary" checked={!!l.optional} onChange={(e) => set({ optional: e.target.checked })} />
+        Необязательная - в приложении будет с пометкой
+      </label>
     </>
   );
 }
@@ -290,36 +306,54 @@ function LessonFields({ data, l, set, nameHint }: {
 /**
  * Пара только в дату [date]: отменить, поменять аудиторию или время, поставить на её место другую.
  * Замена живёт под id исходной пары - к нему привязана домашка этой даты.
+ * Без [lesson] или с добавленной (её нет в data.lessons) - новая пара только на эту дату, со своим id.
  */
 function DayEditor({ data, lesson, date, onClose, onSaved }: {
   data: GroupData;
-  lesson: Lesson;
+  lesson: Lesson | null;
   date: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const change = changeOf(data, date, lesson.id);
-  const [l, setL] = useState<Lesson>({ ...lesson, ...change });
+  const scheduled = !!lesson && data.lessons.some((x) => x.id === lesson.id);
+  const change = lesson ? changeOf(data, date, lesson.id) : undefined;
+  const first: Slot = data.slots[0] ?? { n: 1, start: "08:00", end: "09:40" };
+  const [l, setL] = useState<Lesson>(
+    lesson
+      ? { ...lesson, ...change }
+      : {
+          id: "", name: "", name_ru: "", weeks: [1, 1], teacher: "", room: "", room_ru: "",
+          building: "", building_ru: "", day: weekday(date), slot: first.n, start: first.start, end: first.end,
+        },
+  );
   const set = (patch: Partial<Lesson>) => setL((x) => ({ ...x, ...patch }));
   const { error, setError, busy, run } = useSave(onSaved, onClose);
   // остальные предметы группы - чтобы не вбивать заменяющую пару руками
-  const others = [...new Map(data.lessons.filter((x) => x.name_ru !== lesson.name_ru).map((x) => [x.name_ru, x])).values()];
+  const others = [...new Map(data.lessons.filter((x) => x.name_ru !== lesson?.name_ru).map((x) => [x.name_ru, x])).values()];
 
   const save = () => {
-    const t = tidy(l, lesson);
+    const t = tidy(l);
     if (typeof t === "string") return setError(t);
     const { id: _id, day: _day, weeks: _weeks, ...repl } = t;
-    run(() => api.change(data.code, lesson.id, date, repl satisfies DayLesson));
+    if (scheduled) return run(() => api.change(data.code, lesson!.id, date, repl satisfies DayLesson));
+    // id новой - от даты: с парами расписания (у них id с дня недели) не совпадёт
+    let id = lesson?.id ?? `${date}-${t.slot}-${t.name}`;
+    while (!lesson && lessonsOn(data, date, true).some((x) => x.id === id)) id += "+";
+    run(() => api.change(data.code, id, date, { ...repl, added: true }));
   };
 
   return (
-    <Modal open onClose={onClose} title={`Пара на ${humanDate(date)}`}>
+    <Modal open onClose={onClose} title={`Пара ${scheduled ? "" : "только "}на ${humanDate(date)}`}>
       <p className="text-sm text-muted">
-        По расписанию - {lesson.name_ru}, {lesson.start}–{lesson.end}. Правка только на эту дату, в другие недели пара
-        идёт как обычно.{change === null && " Сейчас она отменена."}
+        {scheduled
+          ? `По расписанию - ${lesson!.name_ru}, ${lesson!.start}–${lesson!.end}. Правка только на эту дату, в другие недели пара идёт как обычно.${change === null ? " Сейчас она отменена." : ""}`
+          : "Пара будет только в эту дату, в другие недели её нет."}
       </p>
       {others.length > 0 && (
-        <Field label="Поставить вместо неё" hint="Подставит название, преподавателя и аудиторию, время останется">
+        <Field
+          label={scheduled ? "Поставить вместо неё" : "Взять предмет группы"}
+          hint="Подставит название, преподавателя и аудиторию, время останется"
+        >
           <select
             className={inputClass}
             value=""
@@ -341,16 +375,20 @@ function DayEditor({ data, lesson, date, onClose, onSaved }: {
       <ErrorText>{error}</ErrorText>
       <div className="flex flex-wrap gap-2">
         <Button disabled={busy} onClick={save}>
-          Сохранить на этот день
+          {scheduled ? "Сохранить на этот день" : "Сохранить"}
         </Button>
-        {change !== null && (
-          <Button kind="danger" disabled={busy} onClick={() => run(() => api.change(data.code, lesson.id, date, null))}>
+        {scheduled && change !== null && (
+          <Button kind="danger" disabled={busy} onClick={() => run(() => api.change(data.code, lesson!.id, date, null))}>
             Отменить пару
           </Button>
         )}
-        {change !== undefined && (
-          <Button kind="outline" disabled={busy} onClick={() => run(() => api.dropChange(data.code, lesson.id, date))}>
-            Вернуть как по расписанию
+        {lesson && change !== undefined && (
+          <Button
+            kind={scheduled ? "outline" : "danger"}
+            disabled={busy}
+            onClick={() => run(() => api.dropChange(data.code, lesson.id, date))}
+          >
+            {scheduled ? "Вернуть как по расписанию" : "Удалить пару"}
           </Button>
         )}
         <Button kind="outline" onClick={onClose}>
@@ -387,7 +425,7 @@ function LessonEditor({ data, lesson, day, onClose, onSaved }: {
 
   const save = () => {
     if (l.weeks[0] < 1 || l.weeks[1] > 30 || l.weeks[0] > l.weeks[1]) return setError("Недели: от 1 до 30, «с» не больше «по»");
-    const next = tidy(l, lesson);
+    const next = tidy(l);
     if (typeof next === "string") return setError(next);
     if (!lesson) {
       const ids = new Set(data.lessons.map((x) => x.id));

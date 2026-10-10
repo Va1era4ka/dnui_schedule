@@ -24,7 +24,12 @@ data class Lesson(
     val building: String,
     val weekFrom: Int,
     val weekTo: Int,
+    /** Необязательная - ставится только в админке, в xlsx такого нет. */
+    val optional: Boolean = false,
 ) {
+    /** Подпись под названием на карточках: аудитория и преподаватель, необязательную видно сразу. */
+    val where: String get() = (if (optional) "необязательная · " else "") + roomRu + " · " + teacher
+
     /** Куда вести карту: ищем корпус внутри кампуса, координаты не нужны. */
     val mapQuery: String get() = "$CAMPUS $building"
 }
@@ -99,14 +104,18 @@ class Schedule(
      * Замена несёт id исходной пары - по нему находятся домашка и заметки этой даты.
      */
     private val changes: Map<Pair<String, LocalDate>, Lesson?> = emptyMap(),
+    /** Пары, добавленные только на одну дату, - тоже только с сервера. */
+    private val added: Map<LocalDate, List<Lesson>> = emptyMap(),
 ) {
+    // замены и добавленные на дату тоже бывают с новым предметом или в новом слоте
+    private val all = lessons + changes.values.filterNotNull() + added.values.flatten()
 
     /** Предметы в стабильном порядке - по нему выбирается цвет предмета. */
-    val subjects: List<String> = lessons.map { it.nameRu }.distinct().sorted()
+    val subjects: List<String> = all.map { it.nameRu }.distinct().sorted()
 
     /** Номер пары -> её начало (пара 1 бывает и сдвоенной, берём раннее начало). */
     val slots: List<Pair<Int, LocalTime>> =
-        lessons.groupBy { it.slot }.toSortedMap().map { (n, ls) -> n to ls.minOf { it.start } }
+        all.groupBy { it.slot }.toSortedMap().map { (n, ls) -> n to ls.minOf { it.start } }
 
 
     /** Номер учебной недели. До начала семестра уходит в 0 и минус - так и надо. */
@@ -117,7 +126,7 @@ class Schedule(
 
     /**
      * Пары на дату. Перенос делает воскресенье понедельником, праздник - пустым днём,
-     * правка на дату отменяет или подменяет пару только в эту дату.
+     * правка на дату отменяет, подменяет или добавляет пару только в эту дату.
      * ponytail: неделя берётся по самой дате; понадобится «пары за пятницу
      * пятой недели» - храни в переносе ещё и номер недели.
      */
@@ -128,6 +137,7 @@ class Schedule(
         return lessons
             .filter { it.day == day && week >= it.weekFrom && week <= it.weekTo }
             .mapNotNull { (it.id to date).let { k -> if (k in changes) changes[k] else it } }
+            .plus(added[date].orEmpty())
             .sortedBy { it.start }
     }
 
@@ -255,6 +265,7 @@ class Schedule(
                     building = o.getString("building"),
                     weekFrom = weekFrom,
                     weekTo = weekTo,
+                    optional = o.optBoolean("optional"),
                 )
             val lessons = (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
@@ -275,20 +286,28 @@ class Schedule(
                         Homework(o.getString("text"), until)
                 }
             } ?: emptyMap()
-            val changes = root.optJSONObject("changes")?.let { byDate ->
-                byDate.keys().asSequence().flatMap { d ->
+            val week1 = LocalDate.parse(meta.getString("week1_monday"))
+            val changes = HashMap<Pair<String, LocalDate>, Lesson?>()
+            val added = HashMap<LocalDate, MutableList<Lesson>>()
+            root.optJSONObject("changes")?.let { byDate ->
+                byDate.keys().forEach { d ->
+                    val date = LocalDate.parse(d)
                     val day = byDate.getJSONObject(d)
-                    // правка пары, которую потом убрали из расписания, - ни к чему не относится
-                    day.keys().asSequence().mapNotNull { id ->
-                        val base = byId[id] ?: return@mapNotNull null
-                        (id to LocalDate.parse(d)) to day.optJSONObject(id)
-                            ?.let { lesson(it, id, base.day, base.weekFrom, base.weekTo) }
+                    day.keys().forEach { id ->
+                        val o = day.optJSONObject(id)
+                        val base = byId[id]
+                        if (base != null) {
+                            changes[id to date] = o?.let { lesson(it, id, base.day, base.weekFrom, base.weekTo) }
+                        } else if (o != null && o.optBoolean("added")) {
+                            // пара только на эту дату: неделя - её же, день - по самой дате
+                            val week = Math.floorDiv(date.toEpochDay() - week1.toEpochDay(), 7L).toInt() + 1
+                            added.getOrPut(date) { ArrayList() }.add(lesson(o, id, date.dayOfWeek.value, week, week))
+                        }
+                        // иначе - правка пары, которую потом убрали из расписания: ни к чему не относится
                     }
-                }.toMap()
-            } ?: emptyMap()
-            return Schedule(
-                LocalDate.parse(meta.getString("week1_monday")), lessons, server + local, homework, server, changes,
-            )
+                }
+            }
+            return Schedule(week1, lessons, server + local, homework, server, changes, added)
         }
     }
 }

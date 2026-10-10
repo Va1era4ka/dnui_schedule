@@ -32,6 +32,14 @@ it("правка на дату: отмена и замена только в с�
   expect(nextDates(c, fx.lessons.find((l: { id: string }) => l.id === bd), "2026-10-01", 2)).toEqual(["2026-10-15", "2026-10-29"]);
 });
 
+it("пара, добавленная на дату, - только в эту дату и только с added", () => {
+  const { id: _, day: __, weeks: ___, ...other } = fx.lessons[0];
+  const c = { ...g(), changes: { "2026-10-10": { x: { ...other, added: true } }, "2026-10-11": { y: other } } };
+  expect(lessonsOn(c, "2026-10-10").find((l) => l.id === "x")).toMatchObject({ day: 6, weeks: [6, 6] });
+  expect(lessonsOn(c, "2026-10-17").map((l) => l.id)).not.toContain("x");
+  expect(lessonsOn(c, "2026-10-11").map((l) => l.id)).not.toContain("y"); // правка пары, которой нет, - не добавление
+});
+
 it("следующие пары по предмету идут в обход выходных", () => {
   const bd = fx.lessons.find((l: { id: string }) => l.id === "4-3-金融大数据分析-1");
   expect(nextDates(g({ "2026-10-01": 0 }), bd, "2026-09-24", 2)).toEqual(["2026-10-08", "2026-10-15"]);

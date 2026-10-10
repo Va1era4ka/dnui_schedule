@@ -1,7 +1,7 @@
 /**
  * Какие пары идут в какую дату - та же логика, что Schedule.kt в приложении:
  * неделя считается от первого понедельника, перенос подменяет день недели, 0 - выходной,
- * правка на дату отменяет или подменяет пару только в эту дату.
+ * правка на дату отменяет, подменяет или добавляет пару только в эту дату.
  * Даты - строки "ГГГГ-ММ-ДД", считаем в UTC, чтобы часовой пояс не сдвигал дни.
  */
 import type { GroupData } from "./api";
@@ -36,6 +36,9 @@ export function lessonsOn(g: Sched, iso: string, withCancelled = false): Lesson[
   const day = g.shifts[iso] ?? weekday(iso);
   if (day === 0) return [];
   const w = weekOf(g.meta.week1_monday, iso);
+  const added = Object.entries(g.changes?.[iso] ?? {}).flatMap(([id, c]) =>
+    c?.added && !g.lessons.some((l) => l.id === id) ? [{ ...c, id, day, weeks: [w, w] as [number, number] }] : [],
+  );
   return g.lessons
     .filter((l) => l.day === day && w >= l.weeks[0] && w <= l.weeks[1])
     .flatMap((l) => {
@@ -43,6 +46,7 @@ export function lessonsOn(g: Sched, iso: string, withCancelled = false): Lesson[
       if (c === undefined) return [l];
       return c ? [{ ...l, ...c }] : withCancelled ? [l] : [];
     })
+    .concat(added)
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 

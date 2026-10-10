@@ -125,6 +125,26 @@ it("правка пары в одну дату: отмена и замена", a
   expect(pub.changes).toEqual({});
 });
 
+it("пара на один день: добавить, домашка к ней, удалить; необязательная", async () => {
+  const id = "2026-10-10-2-体育";
+  const url = `/v1/admin/groups/abc234/changes/${encodeURIComponent(id)}/2026-10-10`;
+  const { id: _, weeks: __, day: ___, ...fields } = fixture.lessons[0];
+  const lesson = { ...fields, name_ru: "Физкультура", optional: true, added: true };
+  expect((await call("PUT", url, { body: { lesson: { ...lesson, added: false } } })).status).toBe(400); // без added - нет такой пары
+  expect((await call("PUT", url, { body: { lesson: null } })).status).toBe(400);
+  const taken = `/v1/admin/groups/abc234/changes/${encodeURIComponent(fixture.lessons[0].id)}/2026-10-10`;
+  expect((await call("PUT", taken, { body: { lesson } })).status).toBe(400);
+  expect((await call("PUT", url, { body: { lesson } })).status).toBe(200);
+  const hw = `/v1/admin/groups/abc234/homework/${encodeURIComponent(id)}`;
+  expect((await call("PUT", `${hw}/2026-10-10`, { body: { text: "кеды" } })).status).toBe(200);
+  expect((await call("PUT", `${hw}/2026-10-17`, { body: { text: "кеды" } })).status).toBe(400);
+  let pub: any = await (await exports.default.fetch(new Request(HOST + "/v1/groups/abc234"))).json();
+  expect(pub.changes["2026-10-10"][id]).toEqual(lesson);
+  await call("DELETE", url);
+  pub = await (await exports.default.fetch(new Request(HOST + "/v1/groups/abc234"))).json();
+  expect(pub.changes).toEqual({});
+});
+
 it("пары меняются только с текущим rev - иначе 409, два редактора не затрут друг друга", async () => {
   const ok = await call("PUT", "/v1/admin/groups/abc234/lessons", {
     body: { rev: 5, slots: fixture.slots, lessons: fixture.lessons.slice(0, 3) },

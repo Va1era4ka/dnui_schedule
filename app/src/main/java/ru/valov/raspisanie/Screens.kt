@@ -396,6 +396,10 @@ fun LessonScreen(
                     Chip("Идёт сейчас", cs.primary, cs.onPrimary, Modifier.pulsing())
                     Spacer(Modifier.width(8.dp))
                 }
+                if (l.optional) {
+                    Chip("Необязательная", cs.surfaceContainerHighest, cs.onSurfaceVariant)
+                    Spacer(Modifier.width(8.dp))
+                }
                 Text(
                     l.start.toString() + " – " + l.end,
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = cs.onPrimaryContainer,
@@ -446,7 +450,9 @@ fun LessonScreen(
             InfoDivider()
             InfoRow(
                 Icons.Default.DateRange, "Недели",
-                "" + l.weekFrom + "–" + l.weekTo + " · " + DAYS[l.day - 1].lowercase(),
+                // пара на одну дату - неделя у неё одна
+                (if (l.weekFrom == l.weekTo) "" + l.weekFrom + "-я" else "" + l.weekFrom + "–" + l.weekTo) +
+                    " · " + DAYS[l.day - 1].lowercase(),
             )
         }
 
