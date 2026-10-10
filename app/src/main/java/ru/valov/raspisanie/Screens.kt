@@ -61,6 +61,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -643,6 +644,7 @@ fun SettingsScreen(
     groupShifts: Map<LocalDate, Int>,
     onTheme: (Int) -> Unit,
     onChanged: () -> Unit,
+    onAdmin: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
@@ -657,6 +659,8 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var update by remember { mutableStateOf("Версия " + Updater.installed(ctx)) }
     var autoUpdate by remember { mutableStateOf(prefs.autoUpdate) }
+    var adminOn by remember { mutableStateOf(prefs.adminOn) }
+    var taps by remember { mutableIntStateOf(0) }
 
     Column(
         Modifier
@@ -838,7 +842,16 @@ fun SettingsScreen(
                 Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(update, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    update,
+                    Modifier.weight(1f).clickable(enabled = !adminOn) {
+                        if (++taps < 10) return@clickable
+                        adminOn = true
+                        prefs.adminOn = true
+                        Toast.makeText(ctx, "Админка открыта", Toast.LENGTH_SHORT).show()
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 TextButton(onClick = {
                     update = "Проверяю..."
                     scope.launch {
@@ -851,6 +864,10 @@ fun SettingsScreen(
             SwitchRow("Проверять обновления", "раз в неделю, при выходе новой версии предложит обновиться", autoUpdate) {
                 autoUpdate = it
                 prefs.autoUpdate = it
+            }
+            if (adminOn) {
+                InfoDivider()
+                ActionRow("Админка", prefs.server.removePrefix("https://"), onAdmin)
             }
         }
 

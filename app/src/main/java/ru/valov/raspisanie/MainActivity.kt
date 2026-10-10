@@ -173,6 +173,7 @@ fun App(theme: Int, starts: Int, onTheme: (Int) -> Unit) {
     // у своего xlsx классов нет - плашку показываем только у встроенного
     val badge = remember(klass, settingsRev) { if (prefs.source == "bundled") "Класс $klass" else null }
     var choosing by remember { mutableStateOf(false) }   // смена источника из настроек
+    var admin by remember { mutableStateOf(false) }      // веб-админка сервера (Admin.kt)
     val scope = rememberCoroutineScope()
 
     // Сервер: сверяемся при каждом открытии. Не вышло - работаем по последнему скачанному
@@ -258,6 +259,12 @@ fun App(theme: Int, starts: Int, onTheme: (Int) -> Unit) {
         )
     }
 
+    if (admin) {
+        // назад внутри админки листает её страницы, с первой - закрывает
+        AdminScreen(prefs.server) { admin = false; sync() }
+        return
+    }
+
     if (choosing) {
         BackHandler { choosing = false }
         SourceScreen(
@@ -332,6 +339,7 @@ fun App(theme: Int, starts: Int, onTheme: (Int) -> Unit) {
                                     onSync = sync,
                                     onTheme = onTheme,
                                     onChanged = { settingsRev += 1; Notifier.schedule(ctx) },
+                                    onAdmin = { admin = true },
                                 )
                             }
                         }

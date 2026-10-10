@@ -73,6 +73,11 @@ class Prefs(private val ctx: Context) {
         get() = sp.getBoolean("autoUpdate", false)
         set(v) = sp.edit().putBoolean("autoUpdate", v).apply()
 
+    /** Пункт «Админка» в настройках - открывается десятью нажатиями на версию. */
+    var adminOn: Boolean
+        get() = sp.getBoolean("adminOn", false)
+        set(v) = sp.edit().putBoolean("adminOn", v).apply()
+
     /** Когда GitHub последний раз ответил на проверку обновлений, мс. */
     var updateCheckedAt: Long
         get() = sp.getLong("updateCheckedAt", 0)
