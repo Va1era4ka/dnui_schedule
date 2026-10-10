@@ -2,6 +2,7 @@ package ru.valov.raspisanie
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.view.ViewGroup
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -40,6 +41,9 @@ fun AdminScreen(server: String, onBack: () -> Unit) {
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
+                // без явного MATCH_PARENT AndroidView отдаёт WRAP_CONTENT, и WebView считает экраном
+                // всю высоту страницы: окна <dialog> (position: fixed, по центру) уезжают за край
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 webViewClient = WebViewClient()
