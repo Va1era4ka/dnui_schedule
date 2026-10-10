@@ -122,6 +122,25 @@ async function route(req: Request, env: Env, path: string, user: string): Promis
 
   if (path === "/v1/admin/me" && m === "GET") return json({ email: user });
 
+  // Объявленная версия приложения - одна на сервер, не на группу
+  if (path === "/v1/admin/app") {
+    if (m === "GET") {
+      const r = await db.prepare("SELECT value FROM settings WHERE key = 'app_version'").first<{ value: string }>();
+      return json({ version: r?.value ?? null });
+    }
+    if (m === "PUT") {
+      const b = await body(req);
+      // как versionName в CI: тег без «v»
+      const v = typeof b.version === "string" ? b.version.trim().replace(/^v/, "") : "";
+      if (!/^\d+(\.\d+){1,3}$/.test(v)) bad("version: номер версии, как в теге релиза: 1.2.0");
+      await db
+        .prepare("INSERT INTO settings (key, value) VALUES ('app_version', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+        .bind(v)
+        .run();
+      return json({ version: v });
+    }
+  }
+
   if (path === "/v1/admin/groups") {
     if (m === "GET") {
       const { results } = await db

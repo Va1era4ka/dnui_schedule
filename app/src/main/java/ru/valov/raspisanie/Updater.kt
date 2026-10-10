@@ -70,6 +70,16 @@ object Updater {
         r.takeIf { it.version != v }
     }
 
+    /**
+     * Версия, которую объявили на сервере расписания из админки, если она не та, что стоит.
+     * master-<N> и dev молчат, как и в [weekly].
+     */
+    fun announced(ctx: Context, s: Schedule): String? {
+        val v = installed(ctx)
+        if (v == "dev" || v.startsWith("master-")) return null
+        return s.appVersion?.takeIf { it != v }
+    }
+
     /** Скачанный APK после установки не нужен: зовётся по MY_PACKAGE_REPLACED. */
     fun clearDownload(ctx: Context) {
         apk(ctx).delete()

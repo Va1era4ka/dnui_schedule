@@ -145,6 +145,18 @@ it("пара на один день: добавить, домашка к ней,
   expect(pub.changes).toEqual({});
 });
 
+it("версия приложения: объявить - она в ответе группы и в ETag", async () => {
+  const get = () => exports.default.fetch(new Request(HOST + "/v1/groups/abc234"));
+  const before = (await get()).headers.get("etag");
+  expect(await (await call("GET", "/v1/admin/app")).json()).toEqual({ version: null });
+  expect((await call("PUT", "/v1/admin/app", { body: { version: "последняя" } })).status).toBe(400);
+  expect(await (await call("PUT", "/v1/admin/app", { body: { version: " v1.2.0 " } })).json()).toEqual({ version: "1.2.0" });
+  const r = await get();
+  expect(r.headers.get("etag")).not.toBe(before);
+  expect(((await r.json()) as any).app_version).toBe("1.2.0");
+  await env.DB.prepare("DELETE FROM settings").run();
+});
+
 it("пары меняются только с текущим rev - иначе 409, два редактора не затрут друг друга", async () => {
   const ok = await call("PUT", "/v1/admin/groups/abc234/lessons", {
     body: { rev: 5, slots: fixture.slots, lessons: fixture.lessons.slice(0, 3) },

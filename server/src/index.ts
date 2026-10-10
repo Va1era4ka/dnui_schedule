@@ -59,18 +59,21 @@ async function adminPage(req: Request, env: Env): Promise<Response> {
 
 async function group(req: Request, env: Env, code: string): Promise<Response> {
   // Одним батчем - это одна транзакция: rev, переносы, домашка и правки на дату из одного состояния базы.
-  const [g, shifts, homework, changes] = await env.DB.batch([
+  const [g, shifts, homework, changes, settings] = await env.DB.batch([
     env.DB.prepare("SELECT * FROM groups WHERE code = ?").bind(code),
     env.DB.prepare("SELECT date, day FROM shifts WHERE group_code = ? ORDER BY date").bind(code),
     env.DB.prepare(
       "SELECT lesson_id AS lesson, date, text, until FROM homework WHERE group_code = ? ORDER BY date, lesson_id",
     ).bind(code),
     env.DB.prepare("SELECT date, lesson_id, lesson_json FROM changes WHERE group_code = ? ORDER BY date, lesson_id").bind(code),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'app_version'"),
   ]);
   const row = g.results[0] as GroupRow | undefined;
   if (!row) return pub({ error: "not_found" }, 404);
 
-  const etag = `"${row.rev}"`;
+  const appVersion = (settings.results[0] as { value: string } | undefined)?.value;
+  // объявили версию - ETag меняется, и приложения, у которых группа не менялась, тоже её получат
+  const etag = appVersion ? `"${row.rev}-${appVersion}"` : `"${row.rev}"`;
   if (req.headers.get("if-none-match") === etag) {
     return new Response(null, { status: 304, headers: { etag, "cache-control": "no-cache", ...CORS } });
   }
@@ -94,6 +97,7 @@ async function group(req: Request, env: Env, code: string): Promise<Response> {
       changes: (changes.results as { date: string; lesson_id: string; lesson_json: string | null }[]).reduce<
         Record<string, Record<string, unknown>>
       >((o, c) => (((o[c.date] ??= {})[c.lesson_id] = c.lesson_json && JSON.parse(c.lesson_json)), o), {}),
+      ...(appVersion && { app_version: appVersion }),
     },
     200,
     { etag },

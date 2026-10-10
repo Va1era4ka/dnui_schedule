@@ -93,6 +93,12 @@ class SyncTest {
         assertFalse(s.lessons.any { it.optional })
     }
 
+    @Test fun `версия приложения с сервера - только если объявили`() {
+        val root = JSONObject(File("../fixtures/schedule.1.json").readText())
+        assertNull(Schedule.parse(root, emptyMap()).appVersion)
+        assertEquals("1.2.0", Schedule.parse(root.put("app_version", "1.2.0"), emptyMap()).appVersion)
+    }
+
     @Test fun `ссылки-приглашения - App Links нашего домена и raspisanie для любого сервера`() {
         assertEquals(def to "gtu47z", Sync.parseLink("https://dnui-schedule.hsryata.com/g/gtu47z"))
         assertEquals(

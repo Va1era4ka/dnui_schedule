@@ -36,7 +36,54 @@ export function Groups() {
           </p>
         </Link>
       ))}
+      <AppVersion />
     </div>
+  );
+}
+
+/** Вышел релиз - объявляем его: у всех, кто подключён к серверу, приложение предложит обновиться. */
+function AppVersion() {
+  const [current, setCurrent] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.appVersion().then(setCurrent, (e: Error) => setError(e.message));
+  }, []);
+
+  const announce = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setCurrent(await api.announce(version));
+      setVersion("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Card title="Версия приложения">
+      <p className="text-sm text-muted">
+        {current ? `Объявлена ${current}. ` : ""}
+        Сначала выпусти релиз на GitHub, потом впиши его номер. Приложения, подключённые к серверу, предложат обновиться при
+        следующем открытии, а вечером перед сводкой на завтра пришлют уведомление.
+      </p>
+      <div className="flex gap-2">
+        <input
+          className={inputClass}
+          value={version}
+          onChange={(e) => setVersion(e.target.value)}
+          placeholder="1.2.0"
+          aria-label="Номер версии"
+        />
+        <Button className="shrink-0" disabled={busy || !version.trim()} onClick={announce}>
+          Объявить
+        </Button>
+      </div>
+      <ErrorText>{error}</ErrorText>
+    </Card>
   );
 }
 

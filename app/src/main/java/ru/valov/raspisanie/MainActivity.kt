@@ -231,6 +231,14 @@ fun App(theme: Int, starts: Int, onTheme: (Int) -> Unit) {
     LaunchedEffect(Unit) {
         if (prefs.autoUpdate) fresh = Updater.weekly(ctx, prefs)
     }
+    // Версия, объявленная из админки, - спрашиваем один раз, приходит со сверкой расписания.
+    LaunchedEffect(schedule) {
+        val v = Updater.announced(ctx, schedule) ?: return@LaunchedEffect
+        if (v == prefs.announcedAsked) return@LaunchedEffect
+        prefs.announcedAsked = v
+        prefs.announcedNotified = v   // уже спросили - уведомление ни к чему
+        fresh = Updater.Release(v, null)
+    }
     fresh?.let { r ->
         AlertDialog(
             onDismissRequest = { fresh = null },

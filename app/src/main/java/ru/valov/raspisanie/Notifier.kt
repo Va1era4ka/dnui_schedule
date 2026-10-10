@@ -125,7 +125,14 @@ object Notifier {
         return "С прошлой пары: " + last.second
     }
 
-    fun notify(ctx: Context, e: Event, body: String, short: String) {
+    fun notify(ctx: Context, e: Event, body: String, short: String) =
+        post(ctx, if (e is Digest) 1 else 2, title(e), short, body)
+
+    /** Сервер объявил новую версию: тап открывает приложение, а оно спросит, обновиться ли. */
+    fun notifyUpdate(ctx: Context, version: String) =
+        post(ctx, 3, "Вышла версия $version", "Откройте приложение, чтобы обновиться", "Откройте приложение, чтобы обновиться")
+
+    private fun post(ctx: Context, id: Int, title: String, short: String, body: String) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, "Пары", NotificationManager.IMPORTANCE_HIGH)
@@ -139,13 +146,13 @@ object Notifier {
             // квадратом. Поэтому там силуэт, а сама иконка приложения крупная, в теле уведомления.
             .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(Icon.createWithResource(ctx, R.mipmap.ic_launcher_bg))
-            .setContentTitle(title(e))
+            .setContentTitle(title)
             .setContentText(short)
             .setStyle(Notification.BigTextStyle().bigText(body))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
-        nm.notify(if (e is Digest) 1 else 2, n)
+        nm.notify(id, n)
     }
 
     /** Ставит будильник на ближайшее событие. Вызывать после любой правки настроек. */
@@ -208,6 +215,11 @@ class AlarmReceiver : BroadcastReceiver() {
         if (e != null) {
             val body = Notifier.text(e, s, prefs)
             Notifier.notify(ctx, e, body, Notifier.summary(e, s, prefs, body))
+        }
+        // объявленная на сервере версия приходит с той же сверкой перед дайджестом
+        Updater.announced(ctx, s)?.takeIf { it != prefs.announcedNotified }?.let { v ->
+            prefs.announcedNotified = v
+            Notifier.notifyUpdate(ctx, v)
         }
         Notifier.schedule(ctx)   // сразу заводим следующий
     }

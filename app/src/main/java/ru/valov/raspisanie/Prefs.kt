@@ -78,6 +78,16 @@ class Prefs(private val ctx: Context) {
         get() = sp.getLong("updateCheckedAt", 0)
         set(v) = sp.edit().putLong("updateCheckedAt", v).apply()
 
+    /** Версия, объявленная сервером, про которую уже спросили в приложении - больше не спрашиваем. */
+    var announcedAsked: String?
+        get() = sp.getString("announcedAsked", null)
+        set(v) = sp.edit().putString("announcedAsked", v).apply()
+
+    /** То же для уведомления: одно на версию. */
+    var announcedNotified: String?
+        get() = sp.getString("announcedNotified", null)
+        set(v) = sp.edit().putString("announcedNotified", v).apply()
+
     /**
      * Правки расписания: дата -> чьи пары идут (0 = выходной).
      * ponytail: набор строк «2026-09-20=1»; на десяток дат в семестре хватает.

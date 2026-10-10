@@ -65,6 +65,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   me: () => call<{ email: string }>("GET", "/v1/admin/me"),
+  /** Объявленная версия приложения: подключённые к серверу предложат обновиться до неё */
+  appVersion: () => call<{ version: string | null }>("GET", "/v1/admin/app").then((r) => r.version),
+  announce: (version: string) => call<{ version: string }>("PUT", "/v1/admin/app", { version }).then((r) => r.version),
   groups: () => call<{ groups: GroupInfo[] }>("GET", "/v1/admin/groups").then((r) => r.groups),
   group: (code: string) => call<GroupData>("GET", `/v1/groups/${code}`),
   create: (g: { title: string; week1_monday: string; listed: boolean; slots?: Slot[]; lessons?: Lesson[] }) =>

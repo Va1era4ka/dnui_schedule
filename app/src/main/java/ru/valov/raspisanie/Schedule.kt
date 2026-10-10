@@ -106,6 +106,8 @@ class Schedule(
     private val changes: Map<Pair<String, LocalDate>, Lesson?> = emptyMap(),
     /** Пары, добавленные только на одну дату, - тоже только с сервера. */
     private val added: Map<LocalDate, List<Lesson>> = emptyMap(),
+    /** Версия приложения, объявленная сервером из админки, - предложить обновиться. */
+    val appVersion: String? = null,
 ) {
     // замены и добавленные на дату тоже бывают с новым предметом или в новом слоте
     private val all = lessons + changes.values.filterNotNull() + added.values.flatten()
@@ -307,7 +309,8 @@ class Schedule(
                     }
                 }
             }
-            return Schedule(week1, lessons, server + local, homework, server, changes, added)
+            val appVersion = root.optString("app_version").ifEmpty { null }
+            return Schedule(week1, lessons, server + local, homework, server, changes, added, appVersion)
         }
     }
 }
