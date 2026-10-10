@@ -605,7 +605,11 @@ private fun HeroTile(
             }
         }
         Column {
-            ProgressBar(fraction, cs.onPrimary.copy(alpha = 0.3f), cs.onPrimary)
+            // идёт - полоса делится переменами внутри пары, ждём - это просто отсчёт до начала
+            ProgressBar(
+                fraction, cs.onPrimary.copy(alpha = 0.3f), cs.onPrimary,
+                if (running) l.breakFractions else emptyList(),
+            )
             Spacer(Modifier.height(11.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Text(
@@ -619,6 +623,11 @@ private fun HeroTile(
                     if (running) "до " + l.end else "в " + l.start,
                     fontSize = 12.sp, color = faded,
                 )
+            }
+            val phase = if (running) l.phase(t) else null
+            if (phase != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(phase, fontSize = 12.sp, color = faded)
             }
         }
     }

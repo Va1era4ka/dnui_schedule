@@ -45,6 +45,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
@@ -417,6 +418,7 @@ fun LessonScreen(
                         Duration.between(l.start, t).seconds / total,
                         cs.onPrimaryContainer.copy(alpha = 0.25f),
                         cs.primary,
+                        l.breakFractions,
                     )
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
@@ -430,6 +432,10 @@ fun LessonScreen(
                             "прошло " + humanMinutes(Duration.between(l.start, t).toMinutes()),
                             fontSize = 12.sp, color = cs.onPrimaryContainer,
                         )
+                    }
+                    l.phase(t)?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(it, fontSize = 12.sp, color = cs.onPrimaryContainer)
                     }
                 }
             }
@@ -454,6 +460,10 @@ fun LessonScreen(
                 (if (l.weekFrom == l.weekTo) "" + l.weekFrom + "-я" else "" + l.weekFrom + "–" + l.weekTo) +
                     " · " + DAYS[l.day - 1].lowercase(),
             )
+            l.structure?.let {
+                InfoDivider()
+                InfoRow(Icons.Default.Info, "Из чего пара", it)
+            }
         }
 
         Spacer(Modifier.height(14.dp))

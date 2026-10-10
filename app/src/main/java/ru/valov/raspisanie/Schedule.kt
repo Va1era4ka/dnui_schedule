@@ -3,6 +3,7 @@ package ru.valov.raspisanie
 import android.content.Context
 import org.json.JSONObject
 import java.io.File
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -26,12 +27,95 @@ data class Lesson(
     val weekTo: Int,
     /** Необязательная - ставится только в админке, в xlsx такого нет. */
     val optional: Boolean = false,
+    /** Минуты по очереди: занятие, перемена, занятие… Пусто - один кусок без перемен. */
+    val parts: List<Int> = emptyList(),
 ) {
     /** Подпись под названием на карточках: аудитория и преподаватель, необязательную видно сразу. */
     val where: String get() = (if (optional) "необязательная · " else "") + roomRu + " · " + teacher
 
     /** Куда вести карту: ищем корпус внутри кампуса, координаты не нужны. */
     val mapQuery: String get() = "$CAMPUS $building"
+
+    /** Пара по кускам со временем: 08:00-08:45 занятие, 08:45-08:55 перемена, … */
+    val segments: List<Part>
+        get() {
+            if (parts.isEmpty()) return listOf(Part(start, end, false))
+            var t = start
+            return parts.mapIndexed { i, m -> Part(t, t.plusMinutes(m.toLong()), i % 2 == 1).also { t = it.end } }
+        }
+
+    /** Перемены как доли длины пары - разрывы на полосе прогресса. */
+    val breakFractions: List<ClosedFloatingPointRange<Float>>
+        get() {
+            val total = Duration.between(start, end).toMinutes().toFloat()
+            return segments.filter { it.isBreak }.map {
+                Duration.between(start, it.start).toMinutes() / total..Duration.between(start, it.end).toMinutes() / total
+            }
+        }
+
+    /**
+     * Где мы внутри идущей пары, если впереди или сейчас перемена:
+     * «Перемена в 08:45», «Перемена до 08:55», у сдвоенной - «Первая пара до 09:40».
+     * null - перемен больше нет или пара не идёт.
+     */
+    fun phase(t: LocalTime): String? {
+        val segs = segments
+        val i = segs.indexOfFirst { !t.isBefore(it.start) && t.isBefore(it.end) }
+        if (i < 0) return null
+        val cur = segs[i]
+        if (cur.isBreak) return (if (cur.isBig) "Большая перемена до " else "Перемена до ") + cur.end
+        val next = segs.drop(i + 1).firstOrNull { it.isBreak } ?: return null
+        if (!next.isBig) return "Перемена в " + next.start
+        val n = segs.take(i + 1).count { it.isBig } + 1
+        return ORDINALS.getOrElse(n - 1) { "$n-я" } + " пара до " + next.start
+    }
+
+    /**
+     * Из чего пара: «45 мин · перемена 10 · 45 мин», у сдвоенной - обе пары и что в каждой.
+     * null - пара одним куском, рассказывать нечего.
+     */
+    val structure: String?
+        get() {
+            val segs = segments
+            if (segs.size == 1) return null
+            val pairs = mutableListOf(mutableListOf<Part>())
+            segs.forEach { if (it.isBig) pairs.add(mutableListOf()) else pairs.last().add(it) }
+            fun inner(p: List<Part>) =
+                p.joinToString(" · ") { if (it.isBreak) "перемена " + it.minutes else "" + it.minutes + " мин" }
+            if (pairs.size == 1) return inner(pairs[0])
+            val head = if (pairs.size == 2) "Сдвоенная: " else "" + pairs.size + " пары подряд: "
+            val ranges = pairs.joinToString(" и ") { "" + it.first().start + "–" + it.last().end }
+            val inners = pairs.map(::inner).distinct()
+            return head + ranges + if (inners.size == 1) "\nв каждой " + inners[0] else ""
+        }
+}
+
+/** Кусок пары: занятие или перемена внутри неё. */
+data class Part(val start: LocalTime, val end: LocalTime, val isBreak: Boolean) {
+    val minutes: Long get() = Duration.between(start, end).toMinutes()
+
+    /** Перемена между парами сдвоенной: внутри пары она 10 минут, между парами - 20. */
+    val isBig: Boolean get() = isBreak && minutes >= BIG_BREAK_MIN
+}
+
+private const val BIG_BREAK_MIN = 15
+private val ORDINALS = listOf("Первая", "Вторая", "Третья")
+
+/**
+ * Куски пары по сетке: у каждой пары сетки 45 + 10 + 45 (половины по краям от 10-минутной перемены),
+ * между парами сетки - перемена до начала следующей. Пара не совпадает с сеткой - одним куском.
+ */
+fun defaultParts(start: LocalTime, end: LocalTime, slots: List<Pair<LocalTime, LocalTime>>): List<Int> {
+    val covered = slots.filter { !it.first.isBefore(start) && !it.second.isAfter(end) }.sortedBy { it.first }
+    if (covered.isEmpty() || covered.first().first != start || covered.last().second != end) return emptyList()
+    val out = ArrayList<Int>()
+    covered.forEachIndexed { i, (s, e) ->
+        if (i > 0) out.add(Duration.between(covered[i - 1].second, s).toMinutes().toInt())
+        val d = Duration.between(s, e).toMinutes().toInt()
+        // ponytail: перемена внутри - только у пар от часа; короче - одним куском
+        if (d >= 60) (d - 10).let { out += listOf(it / 2, 10, it - it / 2) } else out.add(d)
+    }
+    return out
 }
 
 /**
@@ -251,14 +335,26 @@ class Schedule(
         /** JSON формата ассетов -> расписание. [local] - свои переносы из настроек. */
         internal fun parse(root: JSONObject, local: Map<LocalDate, Int>): Schedule {
             val arr = root.getJSONArray("lessons")
+            val slots = root.optJSONArray("slots")?.let { a ->
+                (0 until a.length()).map { a.getJSONObject(it) }
+                    .map { LocalTime.parse(it.getString("start")) to LocalTime.parse(it.getString("end")) }
+            } ?: emptyList()
+            // перемены из админки - если сходятся с длиной пары, иначе по сетке
+            fun parts(o: JSONObject, start: LocalTime, end: LocalTime): List<Int> {
+                val own = o.optJSONArray("parts")?.let { a -> (0 until a.length()).map { a.getInt(it) } }
+                return own?.takeIf { it.size % 2 == 1 && it.sum().toLong() == Duration.between(start, end).toMinutes() }
+                    ?: defaultParts(start, end, slots)
+            }
             // id, день и недели у замены на дату - от исходной пары, остальное - своё
-            fun lesson(o: JSONObject, id: String, day: Int, weekFrom: Int, weekTo: Int) =
-                Lesson(
+            fun lesson(o: JSONObject, id: String, day: Int, weekFrom: Int, weekTo: Int): Lesson {
+                val start = LocalTime.parse(o.getString("start"))
+                val end = LocalTime.parse(o.getString("end"))
+                return Lesson(
                     id = id,
                     day = day,
                     slot = o.getInt("slot"),
-                    start = LocalTime.parse(o.getString("start")),
-                    end = LocalTime.parse(o.getString("end")),
+                    start = start,
+                    end = end,
                     name = o.getString("name"),
                     nameRu = o.getString("name_ru"),
                     teacher = o.getString("teacher"),
@@ -268,7 +364,9 @@ class Schedule(
                     weekFrom = weekFrom,
                     weekTo = weekTo,
                     optional = o.optBoolean("optional"),
+                    parts = parts(o, start, end),
                 )
+            }
             val lessons = (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
                 val weeks = o.getJSONArray("weeks")

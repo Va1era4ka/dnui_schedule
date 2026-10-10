@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, it } from "vitest";
-import { lessonsOn, nextDates, shiftRanges, weekOf } from "./schedule";
+import { defaultParts, lessonsOn, nextDates, shiftRanges, weekOf } from "./schedule";
 
 const fx = JSON.parse(readFileSync(resolve("../../fixtures/schedule.1.json"), "utf8"));
 const g = (shifts: Record<string, number> = {}) => ({ lessons: fx.lessons, meta: fx.meta, shifts });
@@ -50,4 +50,10 @@ it("соседние даты с одной правкой сливаются в
     { from: "2026-09-27", to: "2026-09-27", day: 1 },
     { from: "2026-10-01", to: "2026-10-03", day: 0 },
   ]);
+});
+
+it("пара по сетке: 45 + 10 + 45, сдвоенная - две таких через перемену, не по сетке - одним куском", () => {
+  expect(defaultParts("08:00", "09:40", fx.slots)).toEqual([45, 10, 45]);
+  expect(defaultParts("08:00", "11:40", fx.slots)).toEqual([45, 10, 45, 20, 45, 10, 45]);
+  expect(defaultParts("08:00", "09:30", fx.slots)).toEqual([]);
 });

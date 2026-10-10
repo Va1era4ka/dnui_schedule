@@ -20,6 +20,8 @@ export interface Lesson {
   end: string;
   /** необязательная пара - только из админки, в выгрузке такого нет */
   optional?: boolean;
+  /** минуты по очереди: занятие, перемена, занятие… - только из админки, иначе по сетке (defaultParts) */
+  parts?: number[];
 }
 export interface Slot {
   n: number;

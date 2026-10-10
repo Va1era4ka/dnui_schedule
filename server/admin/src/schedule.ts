@@ -5,7 +5,7 @@
  * Даты - строки "ГГГГ-ММ-ДД", считаем в UTC, чтобы часовой пояс не сдвигал дни.
  */
 import type { GroupData } from "./api";
-import type { Lesson } from "./xlsx";
+import type { Lesson, Slot } from "./xlsx";
 
 const DAY = 86_400_000;
 const ms = (iso: string) => Date.parse(iso + "T00:00:00Z");
@@ -69,6 +69,23 @@ export function shiftRanges(shifts: Record<string, number>) {
     else out.push({ from: d, to: d, day: shifts[d] });
   }
   return out;
+}
+
+export const minutes = (t: string) => +t.slice(0, 2) * 60 + +t.slice(3);
+
+/**
+ * Куски пары по сетке, как в Schedule.kt: у каждой пары сетки 45 + 10 + 45, между ними - перемена
+ * до следующей. Не совпадает с сеткой - [] (одним куском).
+ */
+export function defaultParts(start: string, end: string, slots: Slot[]): number[] {
+  const covered = slots.filter((s) => s.start >= start && s.end <= end).sort((a, b) => a.start.localeCompare(b.start));
+  if (!covered.length || covered[0].start !== start || covered.at(-1)!.end !== end) return [];
+  return covered.flatMap((s, i) => {
+    const gap = i ? [minutes(s.start) - minutes(covered[i - 1].end)] : [];
+    const d = minutes(s.end) - minutes(s.start);
+    const half = Math.floor((d - 10) / 2);
+    return [...gap, ...(d >= 60 ? [half, 10, d - 10 - half] : [d])];
+  });
 }
 
 export function datesBetween(from: string, to: string): string[] {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, type DayLesson, type GroupData } from "./api";
-import { addDays, changeOf, lessonsOn, mondayOfWeek, nextDates, today, weekday, weekOf } from "./schedule";
+import { addDays, changeOf, defaultParts, lessonsOn, minutes, mondayOfWeek, nextDates, today, weekday, weekOf } from "./schedule";
 import { Button, DAYS_FULL, ErrorText, Field, humanDate, inputClass, Modal } from "./ui";
 import type { Lesson, Slot } from "./xlsx";
 
@@ -229,6 +229,13 @@ function tidy(l: Lesson): Lesson | string {
   const name_ru = l.name_ru.trim();
   if (!name_ru) return "Нужно название";
   if (l.start >= l.end) return "Пара должна кончаться позже, чем начинается";
+  const length = minutes(l.end) - minutes(l.start);
+  if (
+    l.parts &&
+    (l.parts.length % 2 === 0 || !l.parts.every((m) => Number.isInteger(m) && m > 0) || l.parts.reduce((a, b) => a + b, 0) !== length)
+  ) {
+    return `Из чего пара: минуты по очереди - занятие + перемена + занятие…, в сумме ${length} (от начала до конца)`;
+  }
   const room = l.room.trim();
   const building = room.split("-")[0];
   return {
@@ -252,6 +259,9 @@ function LessonFields({ data, l, set, nameHint }: {
   nameHint?: string;
 }) {
   const slotOptions = data.slots.length ? data.slots : [1, 2, 3, 4, 5, 6].map((n) => ({ n, start: "", end: "" }));
+  // текстом, пока набирают «45 + 10 +»; в пару уходит разобранным, проверяет tidy
+  const [partsText, setPartsText] = useState(l.parts?.join(" + ") ?? "");
+  const grid = defaultParts(l.start, l.end, data.slots);
   return (
     <>
       <Field label="Название">
@@ -295,6 +305,20 @@ function LessonFields({ data, l, set, nameHint }: {
           <input type="time" className={inputClass} value={l.end} onChange={(e) => set({ end: e.target.value })} />
         </Field>
       </div>
+      <Field
+        label="Из чего пара"
+        hint={`Минуты по очереди: занятие + перемена + занятие… Пусто - ${grid.length ? "по сетке, как у пар из xlsx" : "одним куском, без перемен"}`}
+      >
+        <input
+          className={inputClass}
+          value={partsText}
+          placeholder={grid.join(" + ") || "без перемен"}
+          onChange={(e) => {
+            setPartsText(e.target.value);
+            set({ parts: e.target.value.trim() ? e.target.value.split("+").map((m) => Number(m.trim())) : undefined });
+          }}
+        />
+      </Field>
       <label className="flex items-center gap-3 text-sm">
         <input type="checkbox" className="size-5 accent-primary" checked={!!l.optional} onChange={(e) => set({ optional: e.target.checked })} />
         Необязательная - в приложении будет с пометкой

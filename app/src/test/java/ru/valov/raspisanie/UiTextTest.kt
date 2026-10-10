@@ -1,8 +1,12 @@
 package ru.valov.raspisanie
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
+import org.json.JSONObject
+import java.io.File
 import java.time.LocalDate
+import java.time.LocalTime
 
 class UiTextTest {
 
@@ -49,5 +53,36 @@ class UiTextTest {
         assertEquals("48 мин", humanMinutes(48))
         assertEquals("1 ч 08 мин", humanMinutes(68))
         assertEquals("2 ч 00 мин", humanMinutes(120))
+    }
+
+    @Test
+    fun `пара по сетке - 45 + 10 + 45, сдвоенная - две таких через перемену, своя из админки`() {
+        val root = JSONObject(File("../fixtures/schedule.1.json").readText())
+        val s = Schedule.parse(root, emptyMap())
+        val single = s.lessons.first { it.end.toString() == "09:40" }
+        val double = s.lessons.first { it.end.toString() == "11:40" && it.start.toString() == "08:00" }
+        assertEquals(listOf(45, 10, 45), single.parts)
+        assertEquals(listOf(45, 10, 45, 20, 45, 10, 45), double.parts)
+        assertEquals("45 мин · перемена 10 · 45 мин", single.structure)
+        assertEquals("Сдвоенная: 08:00–09:40 и 10:00–11:40\nв каждой 45 мин · перемена 10 · 45 мин", double.structure)
+
+        fun at(t: String) = double.phase(LocalTime.parse(t))
+        assertEquals("Перемена в 08:45", at("08:30"))
+        assertEquals("Перемена до 08:55", at("08:50"))
+        assertEquals("Первая пара до 09:40", at("09:00"))
+        assertEquals("Большая перемена до 10:00", at("09:45"))
+        assertEquals("Перемена в 10:45", at("10:10"))
+        assertNull(at("11:00"))          // дальше перемен нет - хватает «осталось»
+        assertNull(at("07:59"))
+        assertEquals(listOf(0.45f..0.55f), single.breakFractions)
+
+        // своя раскладка из админки, если сходится по длине; не сходится - по сетке
+        val o = root.getJSONArray("lessons").getJSONObject(0)
+        assertEquals("08:00", o.getString("start"))
+        o.put("end", "09:30").put("parts", org.json.JSONArray(listOf(40, 5, 45)))
+        assertEquals(listOf(40, 5, 45), Schedule.parse(root, emptyMap()).lessons[0].parts)
+        o.put("parts", org.json.JSONArray(listOf(40, 5)))
+        assertEquals(emptyList<Int>(), Schedule.parse(root, emptyMap()).lessons[0].parts)  // 09:30 - не по сетке
+        assertNull(Schedule.parse(root, emptyMap()).lessons[0].structure)
     }
 }

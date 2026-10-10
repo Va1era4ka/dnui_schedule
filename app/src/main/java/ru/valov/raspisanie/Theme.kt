@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -36,6 +37,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
@@ -202,25 +206,29 @@ fun Chip(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier) {
     )
 }
 
-/** Полоса хода пары: своя, чтобы держать цвета и скругления макета. */
+/**
+ * Полоса хода пары: своя, чтобы держать цвета и скругления макета.
+ * [gaps] - перемены долями длины: там полоса сужается в тонкую линию, занятия - отдельные куски.
+ */
 @Composable
-fun ProgressBar(fraction: Float, track: Color, fill: Color) {
+fun ProgressBar(fraction: Float, track: Color, fill: Color, gaps: List<ClosedFloatingPointRange<Float>> = emptyList()) {
     // Часы тикают раз в полминуты: без этого полоса прыгала бы рывками.
-    val width by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(700), label = "progress")
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(track)
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth(width)
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(fill)
-        )
+    val progress by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(700), label = "progress")
+    Canvas(Modifier.fillMaxWidth().height(8.dp)) {
+        val h = size.height
+        val line = 2.dp.toPx()
+        val r = CornerRadius(h / 2)
+        val done = progress * size.width
+        // кусок от a до b: трек, поверх - пройденная часть
+        fun piece(a: Float, b: Float, top: Float, height: Float, round: CornerRadius) {
+            val x0 = a * size.width
+            val x1 = b * size.width
+            drawRoundRect(track, Offset(x0, top), Size(x1 - x0, height), round)
+            if (done > x0) drawRoundRect(fill, Offset(x0, top), Size(minOf(done, x1) - x0, height), round)
+        }
+        val edges = listOf(0f) + gaps.flatMap { listOf(it.start, it.endInclusive) } + 1f
+        edges.chunked(2).forEach { (a, b) -> piece(a, b, 0f, h, r) }
+        gaps.forEach { piece(it.start, it.endInclusive, (h - line) / 2, line, CornerRadius.Zero) }
     }
 }
 

@@ -145,6 +145,18 @@ it("пара на один день: добавить, домашка к ней,
   expect(pub.changes).toEqual({});
 });
 
+it("перемены внутри пары: минуты по очереди, в сумме - длина пары", async () => {
+  const url = `/v1/admin/groups/abc234/changes/${encodeURIComponent("2026-10-11-1-x")}/2026-10-11`;
+  const { id: _, weeks: __, day: ___, ...fields } = fixture.lessons[0]; // 08:00-09:40
+  const put = (parts: unknown) => call("PUT", url, { body: { lesson: { ...fields, parts, added: true } } });
+  expect((await put([45, 10]))).toHaveProperty("status", 400); // чётное - кончается переменой
+  expect((await put([45, 10, 40]))).toHaveProperty("status", 400); // 95 из 100
+  expect((await put([30, 5, 30, 5, 30]))).toHaveProperty("status", 200);
+  const pub: any = await (await exports.default.fetch(new Request(HOST + "/v1/groups/abc234"))).json();
+  expect(pub.changes["2026-10-11"]["2026-10-11-1-x"].parts).toEqual([30, 5, 30, 5, 30]);
+  await call("DELETE", url);
+});
+
 it("версия приложения: объявить - она в ответе группы и в ETag", async () => {
   const get = () => exports.default.fetch(new Request(HOST + "/v1/groups/abc234"));
   const before = (await get()).headers.get("etag");

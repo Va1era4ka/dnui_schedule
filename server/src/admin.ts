@@ -32,14 +32,27 @@ function time(v: unknown, name: string): string {
   return v as string;
 }
 
+const minutes = (t: string) => +t.slice(0, 2) * 60 + +t.slice(3);
+
+/** Из чего пара: минуты занятий и перемен по очереди, в сумме - от начала до конца. */
+function partsOf(v: unknown, start: string, end: string, at: string) {
+  const msg = `${at}.parts: минуты по очереди - занятие, перемена, занятие…, в сумме ${minutes(end) - minutes(start)}`;
+  if (!Array.isArray(v) || v.length % 2 === 0 || v.length > 39) bad(msg);
+  const parts = (v as unknown[]).map((m) => int(m, `${at}.parts`, 1, 600));
+  if (parts.reduce((a, b) => a + b, 0) !== minutes(end) - minutes(start)) bad(msg);
+  return parts;
+}
+
 /** Что пара из себя представляет в конкретный день - всё, кроме id, дня недели и недель. */
 function lessonFields(l: Record<string, unknown>, at: string) {
+  const start = time(l.start, `${at}.start`);
+  const end = time(l.end, `${at}.end`);
   return {
     name: str(l.name, `${at}.name`),
     name_ru: str(l.name_ru, `${at}.name_ru`),
     slot: int(l.slot, `${at}.slot`, 1, 20),
-    start: time(l.start, `${at}.start`),
-    end: time(l.end, `${at}.end`),
+    start,
+    end,
     teacher: str(l.teacher, `${at}.teacher`, 200, 0),
     room: str(l.room, `${at}.room`, 200, 0),
     room_ru: str(l.room_ru, `${at}.room_ru`, 200, 0),
@@ -47,6 +60,8 @@ function lessonFields(l: Record<string, unknown>, at: string) {
     building_ru: str(l.building_ru, `${at}.building_ru`, 200, 0),
     // необязательная - только с пометкой, у обычной поля нет: так пары совпадают с ассетами приложения
     ...(l.optional === true && { optional: true }),
+    // своя раскладка из админки; нет - приложение разложит пару по сетке: 45 + 10 + 45
+    ...(l.parts != null && { parts: partsOf(l.parts, start, end, at) }),
   };
 }
 
