@@ -25,10 +25,14 @@ npm run typecheck
 npm run dev         # http://localhost:8787, база в .wrangler/, админка на /admin/
 ```
 
-Локально Access нет: вход в админку берётся из `.dev.vars` (в git не попадает):
+Локально Access и Telegram нет: вход в админку и в настройки бота (`/tg/api/me`) берётся
+из `.dev.vars` (в git не попадает), для бота нужны ещё любые токен и секрет:
 
 ```
 DEV_USER=me@localhost
+DEV_TG_USER=123
+TG_BOT_TOKEN=dev
+TG_WEBHOOK_SECRET=dev
 ```
 
 Работает только на localhost. Правишь админку — в соседнем терминале
@@ -81,6 +85,22 @@ curl https://dnui-schedule.hsryata.com/v1/groups
 
 Пока `ACCESS_TEAM`/`ACCESS_AUD` пустые, запись закрыта для всех. Добавить редактора — дописать
 email в Policy, код менять не нужно.
+
+## Бот в Telegram
+
+[@dnui_schedule_bot](https://t.me/dnui_schedule_bot) — для тех, у кого нет Android: [src/tg.ts](src/tg.ts),
+подписчики и их настройки — таблица `tg_users`. Пока секретов нет, `/tg/*` отвечает 404. Включить:
+
+```bash
+openssl rand -hex 32                        # секрет вебхука - любая такая строка
+npx wrangler secret put TG_BOT_TOKEN        # токен от @BotFather, команда спросит значение
+npx wrangler secret put TG_WEBHOOK_SECRET   # строка из openssl
+read -rs TG_BOT_TOKEN; read -rs TG_WEBHOOK_SECRET; export TG_BOT_TOKEN TG_WEBHOOK_SECRET
+npm run tg-setup                            # вебхук, команды, описание, кнопка меню
+```
+
+`read -rs` — чтобы токен не остался в истории. В @BotFather: Bot Settings → Configure Mini App,
+адрес `https://dnui-schedule.hsryata.com/tg/` — с ним работают ссылки `t.me/dnui_schedule_bot?startapp=код`.
 
 ## Свой сервер
 

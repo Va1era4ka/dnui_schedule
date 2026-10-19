@@ -17,3 +17,23 @@ export function json(body: unknown, status = 200, headers: Record<string, string
     },
   });
 }
+
+/** Неверные данные в запросе: ловится наверху и уходит 400 с этим текстом - его можно показывать как есть. */
+export class Bad extends Error {}
+export const bad = (msg: string): never => {
+  throw new Bad(msg);
+};
+
+/** Тело запроса - JSON-объект, иначе Bad. */
+export async function body(req: Request): Promise<Record<string, unknown>> {
+  const text = await req.text();
+  if (text.length > 1_000_000) bad("слишком большой запрос");
+  let v: unknown;
+  try {
+    v = JSON.parse(text || "{}");
+  } catch {
+    bad("тело запроса - не JSON");
+  }
+  if (typeof v !== "object" || v === null || Array.isArray(v)) bad("тело запроса - JSON-объект");
+  return v as Record<string, unknown>;
+}

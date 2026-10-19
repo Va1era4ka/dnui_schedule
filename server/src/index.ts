@@ -1,10 +1,11 @@
 import { admin } from "./admin";
 import { CORS, json } from "./http";
 import { assetLinks, invitePage } from "./invite";
+import { tg } from "./tg";
 
 /**
  * API расписания. Контракт - docs/api.md. Чтение публичное и без входа,
- * запись - /v1/admin/* за Cloudflare Access (admin.ts).
+ * запись - /v1/admin/* за Cloudflare Access (admin.ts), бот и его Mini App - /tg/* (tg.ts).
  */
 
 interface GroupRow {
@@ -24,6 +25,7 @@ export default {
     const path = new URL(req.url).pathname;
     if (path.startsWith("/v1/admin/")) return admin(req, env, path);
     if (path === "/admin" || path.startsWith("/admin/")) return adminPage(req, env);
+    if (path.startsWith("/tg/")) return tg(req, env, path);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (req.method !== "GET") return pub({ error: "method_not_allowed" }, 405);
 

@@ -4,12 +4,7 @@
  * при следующем открытии.
  */
 import { accessUser } from "./auth";
-import { json } from "./http";
-
-class Bad extends Error {}
-const bad = (msg: string): never => {
-  throw new Bad(msg);
-};
+import { Bad, bad, body, json } from "./http";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^\d{2}:\d{2}$/;
@@ -91,19 +86,6 @@ function slotsOf(v: unknown) {
     start: time(s.start, `slots[${i}].start`),
     end: time(s.end, `slots[${i}].end`),
   }));
-}
-
-async function body(req: Request): Promise<Record<string, unknown>> {
-  const text = await req.text();
-  if (text.length > 1_000_000) bad("слишком большой запрос");
-  let v: unknown;
-  try {
-    v = JSON.parse(text || "{}");
-  } catch {
-    bad("тело запроса - не JSON");
-  }
-  if (typeof v !== "object" || v === null || Array.isArray(v)) bad("тело запроса - JSON-объект");
-  return v as Record<string, unknown>;
 }
 
 export async function admin(req: Request, env: Env, path: string): Promise<Response> {

@@ -12,6 +12,10 @@ export default defineConfig({
           // своя «команда» Access: ключи для неё тесты подсовывают сами (test/admin.test.ts)
           ACCESS_TEAM: "testteam",
           ACCESS_AUD: "test-aud",
+          // бот: initData тесты подписывают этим токеном сами (test/tg.test.ts)
+          TG_BOT_TOKEN: "123456:TEST-token",
+          TG_WEBHOOK_SECRET: "test-secret",
+          DEV_TG_USER: "777",
         },
       },
     })),

@@ -10,6 +10,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "seed": "node scripts/seed.mjs",
+    "tg-setup": "node scripts/tg-setup.mjs",
     "test": "vitest run && npm --prefix admin test",
     "typecheck": "wrangler types --strict-vars=false && tsc --noEmit"
   },
