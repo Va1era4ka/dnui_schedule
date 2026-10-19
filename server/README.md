@@ -9,13 +9,18 @@ Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admi
 с эталонами в `fixtures/`).
 Бесплатного тарифа Cloudflare хватает с запасом.
 
+Логика расписания — [shared/](shared), общая для Worker и админки: какие пары в какую дату,
+из чего пара состоит, какая к ней домашка, когда что напомнить. Это копия `Schedule.kt` и
+`nextEvent` из `Notifier.kt`: тесты рядом сверяют те же случаи, что `NotifierTest`, `UiTextTest`
+и `SyncTest` в приложении, — поменял правило в одном, поменяй и в другом.
+
 ## Разработка
 
 Нужен Node 22+ (тестовый пакет Cloudflare на 20-й не поддерживается).
 
 ```bash
 npm install         # заодно ставит зависимости admin/
-npm test            # Worker с локальной D1 + разбор xlsx в админке
+npm test            # Worker с локальной D1, shared/ + разбор xlsx в админке
 npm run typecheck
 npm run dev         # http://localhost:8787, база в .wrangler/, админка на /admin/
 ```

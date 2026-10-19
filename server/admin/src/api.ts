@@ -1,4 +1,4 @@
-import type { Lesson, Slot } from "./xlsx";
+import type { DayLesson, GroupData, Lesson, Slot } from "../../shared/types";
 
 /** Группа в списке админки. */
 export interface GroupInfo {
@@ -8,29 +8,6 @@ export interface GroupInfo {
   rev: number;
   updated_at: string;
   updated_by: string | null;
-}
-
-/** Расписание группы - как его видит приложение (публичный GET). */
-/** Пара в конкретный день: всё, кроме id, дня недели и недель - они остаются от пары по расписанию. */
-export type DayLesson = Omit<Lesson, "id" | "day" | "weeks"> & {
-  /** новая пара только на эту дату, под своим id - не замена пары из расписания */
-  added?: boolean;
-};
-
-export interface GroupData {
-  code: string;
-  title: string;
-  rev: number;
-  meta: { week1_monday: string; weeks: number };
-  slots: Slot[];
-  lessons: Lesson[];
-  shifts: Record<string, number>;
-  homework: { lesson: string; date: string; text: string; until: string | null }[];
-  /**
-   * Правки на одну дату: дата -> id пары -> null (отменена), что идёт вместо неё или добавленная пара (added).
-   * Нет в ответе, закэшированном до появления правок (304).
-   */
-  changes?: Record<string, Record<string, DayLesson | null>>;
 }
 
 export class ApiError extends Error {

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { api, type GroupData } from "./api";
-import { datesBetween, shiftRanges, today, weekday } from "./schedule";
+import { datesBetween, shiftRanges, today, weekday } from "../../shared/schedule";
+import type { GroupData } from "../../shared/types";
+import { api } from "./api";
 import { Button, Card, DAYS, DAYS_FULL, ErrorText, Field, humanDate, inputClass } from "./ui";
 
 /** «1–7 октября · выходные», «вс, 27 сентября · пары за понедельник» - как в настройках приложения. */

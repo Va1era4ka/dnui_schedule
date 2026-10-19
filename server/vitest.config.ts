@@ -16,6 +16,7 @@ export default defineConfig({
       },
     })),
   ],
+  // shared/ - логика расписания для Worker, админки и Mini App: проверяем её в рантайме Workers.
   // admin/ - отдельный пакет со своими тестами (npm --prefix admin test)
-  test: { include: ["test/**/*.test.ts"], setupFiles: ["./test/setup.ts"] },
+  test: { include: ["test/**/*.test.ts", "shared/**/*.test.ts"], setupFiles: ["./test/setup.ts"] },
 });
