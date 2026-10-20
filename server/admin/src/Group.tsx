@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { api, type GroupData, type GroupInfo } from "./api";
+import type { GroupData, Lesson } from "../../shared/types";
+import { api, type GroupInfo } from "./api";
 import { Checkbox, mondayHint } from "./Groups";
 import { Homework } from "./Homework";
 import { Shifts } from "./Shifts";
 import { Button, Card, DAYS, ErrorText, Field, inputClass, Link, mondayOf, navigate } from "./ui";
 import { Week } from "./Week";
-import { diffLessons, type Lesson, parseXlsx, type Parsed } from "./xlsx";
+import { diffLessons, parseXlsx, type Parsed } from "./xlsx";
 
 const TABS = [
   ["", "Неделя"],

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { api, type DayLesson, type GroupData } from "./api";
-import { addDays, changeOf, defaultParts, lessonsOn, minutes, mondayOfWeek, nextDates, today, weekday, weekOf } from "./schedule";
+import { addDays, changeOf, defaultParts, lessonsOn, minutes, mondayOfWeek, nextDates, today, weekday, weekOf } from "../../shared/schedule";
+import type { DayLesson, GroupData, Lesson, Slot } from "../../shared/types";
+import { api } from "./api";
 import { Button, DAYS_FULL, ErrorText, Field, humanDate, inputClass, Modal } from "./ui";
-import type { Lesson, Slot } from "./xlsx";
 
 type Edit =
   | { kind: "lesson"; lesson: Lesson | null; day: number }

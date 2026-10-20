@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/*
+ * Цвета приложения (Theme.kt). Светлая или тёмная - data-theme из telegram.ts:
+ * как у Telegram, вне Telegram - как у системы.
+ */
+:root {
+  --primary: #5a3dc4;
+  --on-primary: #ffffff;
+  --primary-container: #e5dcff;
+  --on-primary-container: #22005f;
+  --tertiary-container: #ffdcc0;
+  --on-tertiary-container: #5c3000;
+  --bg: #fbf8fd;
+  --fg: #1b1723;
+  --variant: #f4eff7;
+  --muted: #5f5869;
+  --lowest: #ffffff;
+  --highest: #ede7f2;
+  --outline-variant: #e6dfec;
+  --error: #b3261e;
+  /* предметы: пастельная заливка и тёмный текст той же гаммы, порядок - как в Theme.kt */
+  --s0-bg: #e5dcff;
+  --s0-fg: #22005f;
+  --s1-bg: #d7e6ff;
+  --s1-fg: #00305e;
+  --s2-bg: #cfebdc;
+  --s2-fg: #06452a;
+  --s3-bg: #ffdcc0;
+  --s3-fg: #5c3000;
+  --s4-bg: #fbd9e6;
+  --s4-fg: #5c0031;
+  --s5-bg: #cde9e7;
+  --s5-fg: #00363a;
+  --s6-bg: #f2e4b8;
+  --s6-fg: #443100;
+  --s7-bg: #e2dff0;
+  --s7-fg: #2b2a4a;
+  --s8-bg: #ffd9d6;
+  --s8-fg: #5c1512;
+  color-scheme: light;
+  /* полоска «домой» у iPhone: Telegram отдаёт её своей переменной, Safari - env() */
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px));
+}
+:root[data-theme="dark"] {
+  --primary: #cfbcff;
+  --on-primary: #341a9c;
+  --primary-container: #4b2fb0;
+  --on-primary-container: #e8deff;
+  --tertiary-container: #432a14;
+  --on-tertiary-container: #ffd3b0;
+  --bg: #131019;
+  --fg: #e9e1f3;
+  --variant: #1a1622;
+  --muted: #a9a0b8;
+  --lowest: #1a1622;
+  --highest: #241f2f;
+  --outline-variant: #2b2537;
+  --error: #ffb4ab;
+  --s0-bg: #30264f;
+  --s0-fg: #d8cbff;
+  --s1-bg: #1b2c49;
+  --s1-fg: #c3daff;
+  --s2-bg: #16382a;
+  --s2-fg: #b7e6cc;
+  --s3-bg: #432a14;
+  --s3-fg: #ffd3b0;
+  --s4-bg: #43202f;
+  --s4-fg: #f8c9dd;
+  --s5-bg: #15343a;
+  --s5-fg: #b5e4e4;
+  --s6-bg: #3a3016;
+  --s6-fg: #eadfb0;
+  --s7-bg: #2a2838;
+  --s7-fg: #d5d2e8;
+  --s8-bg: #45241f;
+  --s8-fg: #ffc9c3;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-on-tertiary-container: var(--on-tertiary-container);
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-variant: var(--variant);
+  --color-muted: var(--muted);
+  --color-lowest: var(--lowest);
+  --color-highest: var(--highest);
+  --color-outline-variant: var(--outline-variant);
+  --color-error: var(--error);
+}
+
+body {
+  @apply bg-bg text-fg antialiased;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* день или неделя въезжает с той стороны, куда листали */
+@keyframes from-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+.from-right {
+  animation: from-right 220ms ease-out;
+}
+.from-left {
+  animation: from-left 220ms ease-out;
+}
+.rise {
+  animation: rise 260ms ease-out both;
+}
+.breathe {
+  animation: breathe 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .from-right,
+  .from-left,
+  .rise,
+  .breathe {
+    animation: none;
+  }
+}

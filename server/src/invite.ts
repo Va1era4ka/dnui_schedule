@@ -2,6 +2,8 @@
  * Ссылка-приглашение /g/{code}. С установленным приложением Android открывает его сразу
  * (App Links, см. assetLinks), эту страницу видят без приложения или во встроенных браузерах
  * WeChat/QQ - там на приложение не перейти, поэтому код написан крупно: его перепечатывают.
+ * Приложение есть только под Android; с айфона и компьютера ведём в Telegram - в Mini App бота,
+ * сразу с этой группой (t.me/…?startapp=код).
  */
 
 const esc = (s: string) =>
@@ -21,23 +23,42 @@ export function assetLinks(env: Env): Response {
   return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 }
 
-export async function invitePage(req: Request, env: Env, code: string): Promise<Response> {
+export async function invitePage(req: Request, env: Env & { TG_BOT_TOKEN?: string }, code: string): Promise<Response> {
   const g = await env.DB.prepare("SELECT title FROM groups WHERE code = ?").bind(code).first<{ title: string }>();
   if (!g) {
     return page("Группа не найдена", `<h1>Группа не найдена</h1><p>Проверьте ссылку — кода «${esc(code)}» нет.</p>`, 404);
   }
   const open = `raspisanie://connect?server=${encodeURIComponent(new URL(req.url).origin)}&group=${code}`;
-  return page(
-    g.title,
-    `<h1>${esc(g.title)}</h1>
-<p>Расписание группы для приложения «Расписание»: пары, переносы и домашка.</p>
-<a class="btn" href="${esc(open)}">Открыть в приложении</a>
-<p class="label">Код группы</p>
-<div class="code">${esc(code)}</div>
-<p>Нет приложения? <a href="${esc(env.APK_URL)}">Скачайте APK</a>, при первом запуске выберите
+  const app = `<p>Нет приложения? <a href="${esc(env.APK_URL)}">Скачайте APK</a>, при первом запуске выберите
 «С сервера» и введите код.</p>
 <p class="hint">Кнопка не сработала — откройте ссылку в обычном браузере или введите код вручную:
-Настройки → Источник → С сервера.</p>`,
+Настройки → Источник → С сервера.</p>`;
+  const codeBlock = `<p class="label">Код группы</p>
+<div class="code">${esc(code)}</div>`;
+  const head = `<h1>${esc(g.title)}</h1>
+<p>Расписание группы: пары, переносы и домашка.</p>`;
+  // бот включён, когда у Worker есть его токен (server/README.md) - до того страница только про приложение
+  const bot = env.TG_BOT_TOKEN && env.TG_BOT_USERNAME;
+  if (!bot) return page(g.title, `${head}\n<a class="btn" href="${esc(open)}">Открыть в приложении</a>\n${codeBlock}\n${app}`);
+  const telegram = `https://t.me/${bot}?startapp=${code}`;
+  if (/Android/i.test(req.headers.get("user-agent") ?? "")) {
+    return page(
+      g.title,
+      `${head}
+<a class="btn" href="${esc(open)}">Открыть в приложении</a>
+<a class="btn outline" href="${esc(telegram)}">Открыть в Telegram</a>
+${codeBlock}
+${app}`,
+    );
+  }
+  return page(
+    g.title,
+    `${head}
+<a class="btn" href="${esc(telegram)}">Открыть в Telegram</a>
+${codeBlock}
+<p>Расписание откроется в боте <a href="https://t.me/${esc(bot)}">@${esc(bot)}</a>, уведомления придут
+туда же. Кнопка не сработала — найдите бота в Telegram и введите код.</p>
+<p class="hint">Android? <a href="${esc(env.APK_URL)}">Приложение</a> работает и без интернета.</p>`,
   );
 }
 
@@ -48,9 +69,9 @@ function page(title: string, body: string, status = 200): Response {
 <title>${esc(title)}</title>
 <style>
 /* цвета приложения (Theme.kt) */
-:root { --bg: #fbf8fd; --fg: #1b1723; --muted: #5f5869; --accent: #5a3dc4; --on-accent: #fff; --card: #ede7f2; }
+:root { --bg: #fbf8fd; --fg: #1b1723; --muted: #5f5869; --accent: #5a3dc4; --on-accent: #fff; --card: #ede7f2; --line: #e6dfec; }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #131019; --fg: #e9e1f3; --muted: #a9a0b8; --accent: #cfbcff; --on-accent: #341a9c; --card: #241f2f; }
+  :root { --bg: #131019; --fg: #e9e1f3; --muted: #a9a0b8; --accent: #cfbcff; --on-accent: #341a9c; --card: #241f2f; --line: #2b2537; }
 }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
 main { max-width: 420px; margin: 0 auto; padding: 40px 16px; }
@@ -59,6 +80,8 @@ p { color: var(--muted); }
 a { color: var(--accent); }
 .btn { display: block; margin: 24px 0; padding: 14px; border-radius: 28px; text-align: center;
   background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+.btn + .btn { margin-top: -12px; }
+.outline { background: none; color: var(--accent); border: 1px solid var(--line); }
 .label { margin: 24px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
 .code { padding: 16px; border-radius: 20px; background: var(--card); text-align: center;
   font: 600 36px/1 ui-monospace, monospace; letter-spacing: .12em; user-select: all; }
@@ -70,6 +93,8 @@ a { color: var(--accent); }
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-cache",
+      // кнопки зависят от телефона: Android - приложение, остальным - Telegram
+      vary: "user-agent",
       // страница только показывает текст - ни скриптов, ни чужих ресурсов ей не нужно
       "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
     },

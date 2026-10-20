@@ -3,31 +3,8 @@
  * Копия Xlsx.kt из приложения: оба разбора сверяются с одними эталонами в fixtures/
  * (xlsx.test.ts здесь, XlsxTest.kt там) - поменял правило в одном, поменяй и в другом.
  */
+import type { Lesson, Slot } from "../../shared/types";
 
-export interface Lesson {
-  id: string;
-  name: string;
-  name_ru: string;
-  weeks: [number, number];
-  teacher: string;
-  room: string;
-  room_ru: string;
-  building: string;
-  building_ru: string;
-  day: number;
-  slot: number;
-  start: string;
-  end: string;
-  /** необязательная пара - только из админки, в выгрузке такого нет */
-  optional?: boolean;
-  /** минуты по очереди: занятие, перемена, занятие… - только из админки, иначе по сетке (defaultParts) */
-  parts?: number[];
-}
-export interface Slot {
-  n: number;
-  start: string;
-  end: string;
-}
 export interface Parsed {
   meta: { title: string; week1_monday: string; weeks: number };
   slots: Slot[];

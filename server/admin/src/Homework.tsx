@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { api, type GroupData } from "./api";
-import { nextDates, today, weekday } from "./schedule";
+import { nextDates, today, weekday } from "../../shared/schedule";
+import type { GroupData } from "../../shared/types";
+import { api } from "./api";
 import { Card, DAYS, ErrorText, humanDate } from "./ui";
 import { HomeworkEditor } from "./Week";
 

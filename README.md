@@ -7,11 +7,17 @@
 
 Android 8+ (minSdk 26), Kotlin + Compose.
 
+Для айфонов и всех остальных — Telegram-бот [@dnui_schedule_bot](https://t.me/dnui_schedule_bot):
+то же расписание группы с сервера в Mini App, уведомления — сообщениями в чат.
+
 ## Установка
 
-<https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest.apk>
+Android: <https://svin-assets.hsryata.com/dnui-app-release/dnui-schedule-latest.apk>
 
 Дальше приложение обновляет себя само: Настройки → «Обновить».
+
+iPhone: ничего ставить не нужно — откройте [@dnui_schedule_bot](https://t.me/dnui_schedule_bot) и нажмите
+«Старт» или перейдите по ссылке-приглашению группы.
 
 ## Сборка
 
@@ -35,6 +41,7 @@ APK — в `app/build/outputs/apk/release/`. Локально подписыва
 
 - [docs/schedule.md](docs/schedule.md) — что править руками, как работают уведомления
 - [docs/release.md](docs/release.md) — CI, секреты, обновление в приложении
+- [server/README.md](server/README.md) — сервер, админка и Telegram-бот
 
 ## Лицензия
 
