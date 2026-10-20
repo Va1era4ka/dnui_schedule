@@ -94,14 +94,15 @@ email в Policy, код менять не нужно.
 подписчики и их настройки — таблица `tg_users`. Пока секретов нет, `/tg/*` отвечает 404. Включить:
 
 ```bash
-openssl rand -hex 32                        # секрет вебхука - любая такая строка
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # секрет вебхука
 npx wrangler secret put TG_BOT_TOKEN        # токен от @BotFather, команда спросит значение
-npx wrangler secret put TG_WEBHOOK_SECRET   # строка из openssl
-read -rs TG_BOT_TOKEN; read -rs TG_WEBHOOK_SECRET; export TG_BOT_TOKEN TG_WEBHOOK_SECRET
+npx wrangler secret put TG_WEBHOOK_SECRET   # строка из первой команды
 npm run tg-setup                            # вебхук, команды, описание, кнопка меню
 ```
 
-`read -rs` — чтобы токен не остался в истории. В @BotFather: Bot Settings → Configure Mini App,
+Команды одинаковые в bash и PowerShell. `tg-setup` спросит токен и секрет — те же, что у Worker, —
+и не покажет их на экране; можно и передать их переменными `TG_BOT_TOKEN` и `TG_WEBHOOK_SECRET`.
+Запускать после деплоя: кнопка меню ведёт на `/tg/`. В @BotFather: Bot Settings → Configure Mini App,
 адрес `https://dnui-schedule.hsryata.com/tg/` — с ним работают ссылки `t.me/dnui_schedule_bot?startapp=код`.
 Их же ставит страница приглашения `/g/{код}`, как только у Worker появился токен: с айфона и
 компьютера — единственной кнопкой, на Android — запасной под «Открыть в приложении».
