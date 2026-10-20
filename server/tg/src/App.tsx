@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { GroupData, Lesson } from "../../shared/types";
 import { api, ApiError, cached, type Me, type Notify, remember } from "./api";
 import { LessonScreen } from "./Lesson";
@@ -99,10 +99,12 @@ export function App() {
     if (!picked) scroll.current = scrollY;
     setPicked({ l, date });
   };
-  const close = () => {
-    setPicked(null);
-    requestAnimationFrame(() => scrollTo(0, scroll.current));
-  };
+  const close = () => setPicked(null);
+  // вернулись с экрана пары - туда же, где были, сразу после отрисовки: requestAnimationFrame
+  // WebView, который в этот момент не рисует (жест «назад» на Android), мог и не вызвать
+  useLayoutEffect(() => {
+    if (!picked) scrollTo(0, scroll.current);
+  }, [picked]);
 
   if (!me) return error ? <Problem error={error} onRetry={load} /> : <Loading />;
   if (invite && invite !== me.group) {

@@ -50,7 +50,8 @@ export function Week({ data, now, onPick }: { data: GroupData; now: Date; onPick
         <Step label="›" title="Следующая неделя" onClick={() => go(week + 1)} />
       </div>
 
-      <div key={week} className={dir}>
+      {/* доигравший сдвиг снимаем - иначе он проиграется заново, когда вкладку покажут снова */}
+      <div key={week} className={dir} onAnimationEnd={(e) => e.target === e.currentTarget && setDir("")}>
         <div className="grid gap-x-[5px] px-3" style={{ gridTemplateColumns: `32px repeat(${days.length}, minmax(0, 1fr))` }}>
           <span />
           {days.map((d) => (

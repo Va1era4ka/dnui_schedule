@@ -102,22 +102,23 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* день или неделя въезжает с той стороны, куда листали */
+/*
+ * День или неделя въезжает с той стороны, куда листали; плитки при первом показе поднимаются.
+ * Только сдвигом, без прозрачности: WebView Android, бывает, не крутит анимацию (жест «назад»),
+ * и с opacity: 0 в начале экран так и оставался пустым.
+ */
 @keyframes from-right {
   from {
-    opacity: 0;
     transform: translateX(24px);
   }
 }
 @keyframes from-left {
   from {
-    opacity: 0;
     transform: translateX(-24px);
   }
 }
 @keyframes rise {
   from {
-    opacity: 0;
     transform: translateY(14px);
   }
 }

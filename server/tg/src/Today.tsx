@@ -20,9 +20,13 @@ export function Today({ data, now, problem, onRetry, onPick }: {
   // сдвиг от сегодня, а не дата: в полночь «Сегодня» само переедет на новый день
   const [offset, setOffset] = useState(0);
   const date = addDays(today, offset);
-  // куда листали: день въезжает с той стороны; первый показ - плитки поднимаются по очереди
+  // куда листали: день въезжает с той стороны; первый показ - плитки поднимаются по очереди.
+  // Доигравшую анимацию снимаем: с элемента, который снова показали после display: none (вкладка,
+  // возврат с экрана пары), браузер проигрывает её заново.
   const [dir, setDir] = useState("");
+  const [intro, setIntro] = useState(true);
   const go = (to: number) => {
+    setIntro(false);
     setDir(to > offset ? "from-right" : "from-left");
     setOffset(to);
   };
@@ -34,7 +38,7 @@ export function Today({ data, now, problem, onRetry, onPick }: {
 
   return (
     <div {...swipe} className="min-h-[calc(100dvh-90px)]">
-      <div key={date} className={dir}>
+      <div key={date} className={dir} onAnimationEnd={(e) => e.target === e.currentTarget && setDir("")}>
         <header className="px-5 pt-3.5 pb-3.5">
           <p className="text-xs font-bold uppercase tracking-[0.09em] text-muted">{dayLabel(date)}</p>
           <h1 className={`${TITLE} mt-1.5`}>{dayTitle(date, today)}</h1>
@@ -74,7 +78,12 @@ export function Today({ data, now, problem, onRetry, onPick }: {
           const homework = homeworkFor(data, l, date)?.text ?? "";
           const open = () => onPick(l, date);
           return (
-            <div key={l.id} className={dir ? "" : "rise"} style={dir ? undefined : { animationDelay: `${(i + 1) * 45}ms` }}>
+            <div
+              key={l.id}
+              className={intro ? "rise" : ""}
+              style={intro ? { animationDelay: `${(i + 1) * 45}ms` } : undefined}
+              onAnimationEnd={(e) => e.target === e.currentTarget && i === lessons.length - 1 && setIntro(false)}
+            >
               {prev && <BreakRow minutes={minutes(l.start) - minutes(prev.end)} />}
               <div className={`flex gap-3 px-5 ${big ? "items-start" : "items-center"}`}>
                 <span className={`w-[46px] shrink-0 text-right text-[13px] font-semibold ${big ? "pt-5 text-primary" : "text-muted"}`}>

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { addDays, homeworkAt, homeworkFor, lessonsOn, minutes, mondayOfWeek, phase, structure, weekday, weekOf } from "../../shared/schedule";
 import type { GroupData, Lesson } from "../../shared/types";
 import { openLink, tg, useBackButton } from "./telegram";
@@ -19,7 +19,7 @@ export function LessonScreen({ data, l, date, now, onBack, onPick }: {
   onPick: (l: Lesson, date: string) => void;
 }) {
   useBackButton(onBack);
-  useEffect(() => scrollTo(0, 0), [l.id, date]);
+  useLayoutEffect(() => scrollTo(0, 0), [l.id, date]);
   const t = timeOf(now);
   const m = minuteOf(now);
   const running = date === dayOf(now) && t >= l.start && t < l.end;
