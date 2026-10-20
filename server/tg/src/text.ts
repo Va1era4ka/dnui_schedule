@@ -3,16 +3,10 @@
  * для сетки недели - и разбор того, что ввели в поле кода группы. text.test.ts сверяет случаи UiTextTest.
  */
 import { addDays, weekday } from "../../shared/schedule";
+import { DAYS } from "../../shared/text";
 
-export const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
-export const DAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-
-/** "2026-10-19" -> «19 октября» */
-export const humanDate = (iso: string) => `${+iso.slice(8)} ${MONTHS[+iso.slice(5, 7) - 1]}`;
-
-/** Над заголовком дня: «пн, 19 октября». */
-export const dayLabel = (iso: string) => `${DAYS_SHORT[weekday(iso) - 1].toLowerCase()}, ${humanDate(iso)}`;
+// даты словами - общие с ботом
+export { DAYS, DAYS_SHORT, dayLabel, humanDate } from "../../shared/text";
 
 /** Заголовок дня: соседние дни - словами, дальше - день недели. */
 export function dayTitle(iso: string, today: string): string {

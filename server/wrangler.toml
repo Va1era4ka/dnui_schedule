@@ -39,6 +39,12 @@ ACCESS_AUD = "b146baa39287269858d055f1cbba9ace277e690d83d7e1b64809e5852404e7d1"
 
 # Бот @dnui_schedule_bot (src/tg.ts): токен и секрет вебхука - не здесь, а в секретах Worker,
 # `wrangler secret put TG_BOT_TOKEN` и `TG_WEBHOOK_SECRET` (server/README.md). Пока их нет - /tg/* отвечает 404.
+# Уведомления бота считаются по часам группы - все группы сейчас в Китае.
+SCHEDULE_TZ = "Asia/Shanghai"
+
+# Уведомления бота (src/notify.ts): раз в минуту - кому что пора прислать. Без токена бота - ничего.
+[triggers]
+crons = ["* * * * *"]
 
 # Локально Worker видел бы адрес боевого домена из routes - тогда не сработали бы ни вход
 # из .dev.vars (только для localhost), ни проверка Origin. Открывать http://localhost:8787/admin/

@@ -1,21 +1,14 @@
 import { admin } from "./admin";
+import { loadGroups } from "./groups";
 import { CORS, json, page } from "./http";
 import { assetLinks, invitePage } from "./invite";
+import { notify } from "./notify";
 import { tg } from "./tg";
 
 /**
  * API расписания. Контракт - docs/api.md. Чтение публичное и без входа,
  * запись - /v1/admin/* за Cloudflare Access (admin.ts), бот и его Mini App - /tg/* (tg.ts).
  */
-
-interface GroupRow {
-  code: string;
-  title: string;
-  week1_monday: string;
-  slots_json: string;
-  lessons_json: string;
-  rev: number;
-}
 
 const pub = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   json(body, status, { ...CORS, ...headers });
@@ -42,6 +35,10 @@ export default {
     if (path === "/.well-known/assetlinks.json") return assetLinks(env);
     return pub({ error: "not_found" }, 404);
   },
+  // уведомления бота - раз в минуту, [triggers] в wrangler.toml
+  async scheduled(controller, env) {
+    await notify(env, controller.scheduledTime);
+  },
 } satisfies ExportedHandler<Env>;
 
 async function adminPage(req: Request, env: Env): Promise<Response> {
@@ -53,48 +50,18 @@ async function adminPage(req: Request, env: Env): Promise<Response> {
 }
 
 async function group(req: Request, env: Env, code: string): Promise<Response> {
-  // Одним батчем - это одна транзакция: rev, переносы, домашка и правки на дату из одного состояния базы.
-  const [g, shifts, homework, changes, settings] = await env.DB.batch([
-    env.DB.prepare("SELECT * FROM groups WHERE code = ?").bind(code),
-    env.DB.prepare("SELECT date, day FROM shifts WHERE group_code = ? ORDER BY date").bind(code),
-    env.DB.prepare(
-      "SELECT lesson_id AS lesson, date, text, until FROM homework WHERE group_code = ? ORDER BY date, lesson_id",
-    ).bind(code),
-    env.DB.prepare("SELECT date, lesson_id, lesson_json FROM changes WHERE group_code = ? ORDER BY date, lesson_id").bind(code),
-    env.DB.prepare("SELECT value FROM settings WHERE key = 'app_version'"),
+  const [groups, settings] = await Promise.all([
+    loadGroups(env.DB, [code]),
+    env.DB.prepare("SELECT value FROM settings WHERE key = 'app_version'").first<{ value: string }>(),
   ]);
-  const row = g.results[0] as GroupRow | undefined;
-  if (!row) return pub({ error: "not_found" }, 404);
+  const g = groups.get(code);
+  if (!g) return pub({ error: "not_found" }, 404);
 
-  const appVersion = (settings.results[0] as { value: string } | undefined)?.value;
+  const appVersion = settings?.value;
   // объявили версию - ETag меняется, и приложения, у которых группа не менялась, тоже её получат
-  const etag = appVersion ? `"${row.rev}-${appVersion}"` : `"${row.rev}"`;
+  const etag = appVersion ? `"${g.rev}-${appVersion}"` : `"${g.rev}"`;
   if (req.headers.get("if-none-match") === etag) {
     return new Response(null, { status: 304, headers: { etag, "cache-control": "no-cache", ...CORS } });
   }
-  const lessons: { weeks: [number, number] }[] = JSON.parse(row.lessons_json);
-  return pub(
-    {
-      code: row.code,
-      title: row.title,
-      rev: row.rev,
-      meta: {
-        title: row.title,
-        week1_monday: row.week1_monday,
-        weeks: Math.max(0, ...lessons.map((l) => l.weeks[1])),
-      },
-      slots: JSON.parse(row.slots_json),
-      lessons,
-      shifts: Object.fromEntries(
-        (shifts.results as { date: string; day: number }[]).map((s) => [s.date, s.day]),
-      ),
-      homework: homework.results,
-      changes: (changes.results as { date: string; lesson_id: string; lesson_json: string | null }[]).reduce<
-        Record<string, Record<string, unknown>>
-      >((o, c) => (((o[c.date] ??= {})[c.lesson_id] = c.lesson_json && JSON.parse(c.lesson_json)), o), {}),
-      ...(appVersion && { app_version: appVersion }),
-    },
-    200,
-    { etag },
-  );
+  return pub({ ...g, ...(appVersion && { app_version: appVersion }) }, 200, { etag });
 }

@@ -115,7 +115,7 @@ const openButton = (origin: string) => ({
 });
 
 /** Вызов Bot API. Ответ Telegram как есть: ok: false и error_code 403 - писать этому человеку нельзя. */
-async function botApi(env: Bot, method: string, params: object) {
+export async function botApi(env: Env & { TG_BOT_TOKEN?: string }, method: string, params: object) {
   const r = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },

@@ -7,13 +7,14 @@
 import { addDays, lessonsOn, minutes, type Sched } from "./schedule";
 import type { Lesson } from "./types";
 
+/** [at] - когда прислать, [date] - дата пар, о которых речь: по ней ищется домашка. */
 export type Event =
-  /** Вечером: что будет завтра, в дату [date]. */
+  /** Вечером: что будет завтра. */
   | { kind: "digest"; at: string; date: string }
   /** За N минут до конца пары: какая следующая, null - эта последняя. */
-  | { kind: "nextUp"; at: string; current: Lesson; next: Lesson | null }
+  | { kind: "nextUp"; at: string; date: string; current: Lesson; next: Lesson | null }
   /** За SOON_MIN минут до начала первой пары дня или пары после большой перемены. */
-  | { kind: "soon"; at: string; lesson: Lesson };
+  | { kind: "soon"; at: string; date: string; lesson: Lesson };
 
 /** Что человек включил - как в настройках приложения. */
 export interface Prefs {
@@ -40,11 +41,11 @@ function eventsOf(g: Sched, iso: string, p: Prefs): Event[] {
   if (p.nextUpOn) {
     const day = lessonsOn(g, iso);
     day.forEach((l, i) => {
-      out.push({ kind: "nextUp", at: addMinutes(`${iso}T${l.end}`, -p.leadMin), current: l, next: day[i + 1] ?? null });
+      out.push({ kind: "nextUp", at: addMinutes(`${iso}T${l.end}`, -p.leadMin), date: iso, current: l, next: day[i + 1] ?? null });
       // Обычная перемена 20 минут - там хватает nextUp с прошлой пары.
       const prev = day[i - 1];
       if (!prev || minutes(prev.end) + SOON_MIN < minutes(l.start)) {
-        out.push({ kind: "soon", at: addMinutes(`${iso}T${l.start}`, -SOON_MIN), lesson: l });
+        out.push({ kind: "soon", at: addMinutes(`${iso}T${l.start}`, -SOON_MIN), date: iso, lesson: l });
       }
     });
   }

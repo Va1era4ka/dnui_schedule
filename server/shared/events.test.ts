@@ -96,5 +96,6 @@ it("cron поминутно рассылает ровно то же, что за
   }
   const whole = eventsBetween(g, from, to, p);
   expect(ticks).toEqual(whole);
-  expect(whole.find((e) => e.kind === "soon" && e.lesson.name === "ночная")?.at).toBe("2026-08-31T23:50");
+  // а дата у него - своей пары: по ней ищется домашка
+  expect(whole.find((e) => e.kind === "soon" && e.lesson.name === "ночная")).toMatchObject({ at: "2026-08-31T23:50", date: "2026-09-01" });
 });

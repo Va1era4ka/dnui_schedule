@@ -48,7 +48,7 @@ export interface GroupData {
   code: string;
   title: string;
   rev: number;
-  meta: { week1_monday: string; weeks: number };
+  meta: { title?: string; week1_monday: string; weeks: number };
   slots: Slot[];
   lessons: Lesson[];
   shifts: Record<string, number>;
