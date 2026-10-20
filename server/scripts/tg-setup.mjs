@@ -40,13 +40,29 @@ async function ask(question) {
   }
 }
 
+/**
+ * fetch с повтором при обрыве связи. VPN-клиенты (Clash и похожие) рвут соединение после первого
+ * запроса, а Node пытается отправить следующий в него же - «other side closed». Повтор открывает
+ * новое; все вызовы тут можно повторять без вреда.
+ */
+async function send(url, init, attempts = 4) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      if (i >= attempts) throw e;
+      await new Promise((resolve) => setTimeout(resolve, 500 * i));
+    }
+  }
+}
+
 function fail(message) {
   console.error(message);
   process.exit(1);
 }
 
 async function call(token, method, params = {}) {
-  const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+  const r = await send(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(params),
