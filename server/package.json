@@ -6,13 +6,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "npm --prefix admin install",
+    "postinstall": "npm --prefix admin install && npm --prefix tg install",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "seed": "node scripts/seed.mjs",
     "tg-setup": "node scripts/tg-setup.mjs",
-    "test": "vitest run && npm --prefix admin test",
-    "typecheck": "wrangler types --strict-vars=false && tsc --noEmit"
+    "test": "vitest run && npm --prefix admin test && npm --prefix tg test",
+    "typecheck": "wrangler types --strict-vars=false && tsc --noEmit && tsc --noEmit -p admin && tsc --noEmit -p tg"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

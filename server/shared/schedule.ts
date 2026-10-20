@@ -164,15 +164,25 @@ export function structure(l: Pick<Lesson, "start" | "end" | "parts">, slots: Slo
   return head + ranges + (inners.length === 1 ? "\nв каждой " + inners[0] : "");
 }
 
-/** Номер пары -> её начало по всем парам группы (сдвоенная пара 1 - раннее начало). */
-export function slotStarts(g: Sched): { n: number; start: string }[] {
-  // замены и добавленные на дату тоже бывают в новом слоте; правка пары, которую потом убрали, - ни к чему
+/**
+ * Все пары группы вместе с заменами и добавленными на дату - те тоже бывают с новым предметом
+ * или в новом слоте. Правка пары, которую потом убрали из расписания, ни к чему не относится.
+ */
+function allLessons(g: Sched): Pick<Lesson, "name_ru" | "slot" | "start">[] {
   const ids = new Set(g.lessons.map((l) => l.id));
   const changed = Object.values(g.changes ?? {}).flatMap((day) =>
     Object.entries(day).flatMap(([id, c]) => (c && (ids.has(id) || c.added) ? [c] : [])),
   );
+  return [...g.lessons, ...changed];
+}
+
+/** Предметы в стабильном порядке - по месту в нём выбирается цвет предмета. */
+export const subjects = (g: Sched) => [...new Set(allLessons(g).map((l) => l.name_ru))].sort();
+
+/** Номер пары -> её начало по всем парам группы (сдвоенная пара 1 - раннее начало). */
+export function slotStarts(g: Sched): { n: number; start: string }[] {
   const starts = new Map<number, string>();
-  for (const l of [...g.lessons, ...changed]) {
+  for (const l of allLessons(g)) {
     const s = starts.get(l.slot);
     if (s === undefined || l.start < s) starts.set(l.slot, l.start);
   }

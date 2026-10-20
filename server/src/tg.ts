@@ -1,11 +1,11 @@
 /**
- * Бот @dnui_schedule_bot и API его Mini App. Бот сам почти ничего не умеет: на /start - кнопка,
- * открывающая расписание. Mini App читает пары из публичного /v1/groups/{code}, а здесь - только
- * настройки человека: группа и уведомления (/tg/api/me).
+ * Бот @dnui_schedule_bot и его Mini App (server/tg, собирается в public/tg). Бот сам почти ничего
+ * не умеет: на /start - кнопка, открывающая расписание. Mini App читает пары из публичного
+ * /v1/groups/{code}, а здесь - только настройки человека: группа и уведомления (/tg/api/me).
  * Токен и секрет вебхука - `wrangler secret put` (server/README.md), пока их нет - /tg/* нет.
  */
 import { SOON_MIN } from "../shared/events";
-import { Bad, bad, body, json } from "./http";
+import { Bad, bad, body, json, page } from "./http";
 
 /** Секреты бота - не в wrangler.toml, поэтому не в сгенерированном Env. */
 interface Secrets {
@@ -30,7 +30,15 @@ export async function tg(req: Request, env: Env & Secrets, path: string): Promis
     if (e instanceof Bad) return json({ error: "bad_request", message: e.message }, 400);
     throw e;
   }
-  return json({ error: "not_found" }, 404);
+  if (path.startsWith("/tg/api/") || req.method !== "GET") return json({ error: "not_found" }, 404);
+  const r = await page(req, env, "/tg/");
+  // Mini App открывается внутри Telegram: в телефоне - встроенным браузером, в веб-версии - во фрейме
+  // web.telegram.org. Скрипт - только свой и SDK Telegram; style - для цветов предметов и полосы хода.
+  r.headers.set(
+    "content-security-policy",
+    "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors https://web.telegram.org",
+  );
+  return r;
 }
 
 // ---- Вебхук: Telegram присылает сюда всё, что пишут боту (setWebhook в scripts/tg-setup.mjs)

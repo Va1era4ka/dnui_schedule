@@ -7,9 +7,10 @@ Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admi
 `wrangler deploy`/`dev` и отдаётся тем же Worker. xlsx разбирается прямо в браузере
 ([admin/src/xlsx.ts](admin/src/xlsx.ts) — копия `Xlsx.kt` из приложения, оба сверяются
 с эталонами в `fixtures/`).
+Mini App бота — [tg/](tg): тот же стек, собирается в `public/tg` и отдаётся по `/tg/`.
 Бесплатного тарифа Cloudflare хватает с запасом.
 
-Логика расписания — [shared/](shared), общая для Worker и админки: какие пары в какую дату,
+Логика расписания — [shared/](shared), общая для Worker, админки и Mini App: какие пары в какую дату,
 из чего пара состоит, какая к ней домашка, когда что напомнить. Это копия `Schedule.kt` и
 `nextEvent` из `Notifier.kt`: тесты рядом сверяют те же случаи, что `NotifierTest`, `UiTextTest`
 и `SyncTest` в приложении, — поменял правило в одном, поменяй и в другом.
@@ -19,10 +20,10 @@ Cloudflare Worker + D1. Чтение публичное, запись (`/v1/admi
 Нужен Node 22+ (тестовый пакет Cloudflare на 20-й не поддерживается).
 
 ```bash
-npm install         # заодно ставит зависимости admin/
-npm test            # Worker с локальной D1, shared/ + разбор xlsx в админке
-npm run typecheck
-npm run dev         # http://localhost:8787, база в .wrangler/, админка на /admin/
+npm install         # заодно ставит зависимости admin/ и tg/
+npm test            # Worker с локальной D1, shared/, разбор xlsx в админке, подписи Mini App
+npm run typecheck   # Worker, админка и Mini App
+npm run dev         # http://localhost:8787, база в .wrangler/, админка на /admin/, Mini App на /tg/
 ```
 
 Локально Access и Telegram нет: вход в админку и в настройки бота (`/tg/api/me`) берётся
@@ -36,7 +37,8 @@ TG_WEBHOOK_SECRET=dev
 ```
 
 Работает только на localhost. Правишь админку — в соседнем терминале
-`npm --prefix admin run dev` пересобирает её на лету, страницу достаточно обновить.
+`npm --prefix admin run dev` пересобирает её на лету, страницу достаточно обновить; Mini App —
+так же, `npm --prefix tg run dev`. Вне Telegram она открывается как обычная страница, а тема — по системе.
 
 Локальная база для `npm run dev`:
 
@@ -101,6 +103,11 @@ npm run tg-setup                            # вебхук, команды, оп
 
 `read -rs` — чтобы токен не остался в истории. В @BotFather: Bot Settings → Configure Mini App,
 адрес `https://dnui-schedule.hsryata.com/tg/` — с ним работают ссылки `t.me/dnui_schedule_bot?startapp=код`.
+
+Mini App ([tg/](tg)) повторяет приложение без того, что живёт только на телефоне: онбординг (группа,
+уведомления — по умолчанию только сводка в 20:00), «Сегодня», неделя, экран пары с домашкой, настройки.
+Расписание берёт из `/v1/groups/{код}`, настройки — из `/tg/api/me`, последнее скачанное держит в
+`localStorage`, чтобы открываться сразу.
 
 ## Свой сервер
 

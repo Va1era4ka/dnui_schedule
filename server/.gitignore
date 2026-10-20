@@ -4,7 +4,8 @@ node_modules/
 worker-configuration.d.ts
 # коды групп из scripts/seed.mjs - одноразовый файл
 seed.sql
-# сборка админки: npm --prefix admin run build
+# сборка админки и Mini App: npm --prefix admin run build, npm --prefix tg run build
 public/admin/
+public/tg/
 # локальные секреты wrangler dev - в git не кладём
 .dev.vars*

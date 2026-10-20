@@ -12,6 +12,7 @@ import {
   phase,
   shiftRanges,
   structure,
+  subjects,
   weekOf,
 } from "./schedule";
 import type { GroupData, Lesson } from "./types";
@@ -67,7 +68,10 @@ it("у замены от исходной пары только id, день и 
 });
 
 it("пара, добавленная на дату, - только в эту дату и только с added", () => {
-  const c = { ...g(), changes: { "2026-10-10": { x: { ...other, added: true } }, "2026-10-11": { y: other } } };
+  const c = { ...g(), changes: { "2026-10-10": { x: { ...other, added: true, name_ru: "Шахматы" } }, "2026-10-11": { y: other } } };
+  // её предмет - в общем списке, как в приложении: от него цвет на сетке
+  expect(subjects(c)).toContain("Шахматы");
+  expect(subjects(c)).toEqual([...subjects(g()), "Шахматы"].sort());
   expect(lessonsOn(c, "2026-10-10").find((l) => l.id === "x")).toMatchObject({ day: 6, weeks: [6, 6] });
   expect(lessonsOn(c, "2026-10-17").map((l) => l.id)).not.toContain("x");
   expect(lessonsOn(c, "2026-10-11").map((l) => l.id)).not.toContain("y"); // правка пары, которой нет, - не добавление

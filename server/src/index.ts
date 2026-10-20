@@ -1,5 +1,5 @@
 import { admin } from "./admin";
-import { CORS, json } from "./http";
+import { CORS, json, page } from "./http";
 import { assetLinks, invitePage } from "./invite";
 import { tg } from "./tg";
 
@@ -25,7 +25,7 @@ export default {
     const path = new URL(req.url).pathname;
     if (path.startsWith("/v1/admin/")) return admin(req, env, path);
     if (path === "/admin" || path.startsWith("/admin/")) return adminPage(req, env);
-    if (path.startsWith("/tg/")) return tg(req, env, path);
+    if (path === "/tg" || path.startsWith("/tg/")) return tg(req, env, path);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (req.method !== "GET") return pub({ error: "method_not_allowed" }, 405);
 
@@ -44,15 +44,8 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-/**
- * Статика админки. Неизвестный маршрут страницы (/admin/g/…) - её index.html, маршруты она рисует
- * сама. Отсутствующий файл (с расширением) - честный 404: иначе старая вкладка после деплоя
- * получила бы HTML вместо скрипта и молча показала пустой экран.
- */
 async function adminPage(req: Request, env: Env): Promise<Response> {
-  let r = await env.ASSETS.fetch(req);
-  if (r.status === 404 && !/\.\w+$/.test(new URL(req.url).pathname)) r = await env.ASSETS.fetch(new URL("/admin/", req.url));
-  r = new Response(r.body, r);
+  const r = await page(req, env, "/admin/");
   // админку нельзя встраивать в чужие страницы и подгружать в неё чужое
   r.headers.set("content-security-policy", "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'");
   r.headers.set("x-frame-options", "DENY");

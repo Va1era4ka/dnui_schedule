@@ -218,3 +218,13 @@ it("вход из .dev.vars - только на localhost", async () => {
   expect(await user(777)).not.toBeNull();
   expect((await me("GET", undefined, null)).status).toBe(401);
 });
+
+it("Mini App: статика со своей CSP - её открывают во фрейме web.telegram.org", async () => {
+  // в CI фронт не собран и страницы нет, но заголовки ставит сам Worker
+  const r = await exports.default.fetch(new Request(HOST + "/tg/settings"));
+  const csp = r.headers.get("content-security-policy") ?? "";
+  expect(csp).toContain("frame-ancestors https://web.telegram.org");
+  expect(csp).toContain("script-src 'self' https://telegram.org");
+  expect((await exports.default.fetch(new Request(HOST + "/tg/api/nope"))).status).toBe(404);
+  expect((await exports.default.fetch(new Request(HOST + "/tg/", { method: "POST" }))).status).toBe(404);
+});
